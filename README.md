@@ -29,4 +29,25 @@ $$
 $$
 
 
-The eggroll paper notes that the sampled $E$ matricies are approximately standard gaussian. As such, we can approximate the score function of our $\phi$ distribution by treating it as such!
+The eggroll paper notes that the sampled $E$ matricies are approximately standard gaussian. As such, we can approximate the score function of our $\phi$ distribution by treating it as such! so basically we say that:
+
+$$
+\frac{\partial}{\partial \theta} \log p(\phi_{t,i}|\theta_t) \approx -\frac{E_{i,t}}{\sigma}
+$$
+
+We can put this all together into a clean little gradient estimator
+
+$$
+\frac{\partial}{\partial \theta} \mathcal{L}
+\approx
+\frac{1}{\sigma}\mathbb{E}
+\left[
+    -E \cdot \mathcal{L}(\theta + \sigma E)
+\right]
+$$
+
+We replace $\mathcal{L}$ with an unbiased estimator of course. After that we just feed this puppy right into the gears of the SGD machine!
+
+Of course there are more implementation details. $A$ and $B$ exist so that we don't have to materialize the E matricies until the very end of the update step to be reported as the final gradient to be given to SGD or adamw. But honestly thats the gist of it. Thats the whole algo.
+
+Well. Explanation done. Now I actually need to code something. Lamentations.
