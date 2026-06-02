@@ -12,6 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device loaded:" + repr(device))
 #section-end
 class EggLinear(Module): #section-start
+    #section-start """
     r"""Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.
 
     This module supports :ref:`TensorFloat32<tf32_on_ampere>`.
@@ -42,25 +43,38 @@ class EggLinear(Module): #section-start
 
     Examples::
 
-        >>> m = nn.Linear(20, 30)
+        >>> m = EggLinear(20, 30)
         >>> input = torch.randn(128, 20)
         >>> output = m(input)
         >>> print(output.size())
         torch.Size([128, 30])
     """
-
+    #section-end
+    #TODO make the forward use the perterbations.
+    #TODO implement the egg_grad function.
+    #TODO STRETCH make the perturb function perturb symetrically.
+    #TODO ensure all of your tensors are full dimensional to avoid broadcast ambiguity.
+    #section-start attributes
     __constants__ = ["in_features", "out_features"]
-    in_features: int
-    out_features: int
-    weight: Tensor
-
-    def __init__(
+    in_features: int # m
+    out_features: int # n
+    weight: Tensor # m x n
+    perturbation_rank: int # r
+    perturbation_stdev: float # sigma
+    A_perturbation: Tensor # batch_size x m x r
+    B_perturbation: Tensor # batch_size x n x r
+    bias_perturbation: Tensor # batch_size x n
+    #section-end
+    def __init__( #section-start
         self,
         in_features: int,
         out_features: int,
         bias: bool = True,
         device=None,
         dtype=None,
+        *,
+        perturbation_rank: int
+        perturbation_stdev: float
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -74,8 +88,10 @@ class EggLinear(Module): #section-start
         else:
             self.register_parameter("bias", None)
         self.reset_parameters()
-
-    def reset_parameters(self) -> None:
+        self.perturbation_rank = perturbation_rank
+        self.perturbation_stdev = perturbation_stdev
+    #section-end
+    def reset_parameters(self) -> None: #section-start
         """
         Resets parameters based on their initialization used in ``__init__``.
         """
@@ -87,18 +103,68 @@ class EggLinear(Module): #section-start
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             init.uniform_(self.bias, -bound, bound)
-
-    def forward(self, input: Tensor) -> Tensor:
+    #section-end
+    def forward(self, input: Tensor) -> Tensor: #section-start
         """
         Runs the forward pass.
         """
         return F.linear(input, self.weight, self.bias)
-
-    def extra_repr(self) -> str:
+    #section-end
+    def extra_repr(self) -> str: #section-start
         """
         Return the extra representation of the module.
         """
         return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}"
+    #section-end
+    def perturb(self, batch_size) -> None: #section-start
+        #section-start """
+        """
+        Sample the perturbation matricies/vectors for a eggroll learning step.
+        """
+        #section-end
+        #section-start set A perturbation
+        self.A_perturbation = torch.normal(torch.zeros(
+            size=(
+                batch_size,
+                self.in_features,
+                self.perturbation_rank
+                )
+            ), std=1)
+        #section-end
+        #section-start set B perturbation
+        self.B_perturbation = torch.normal(torch.zeros(
+            size=(
+                batch_size,
+                self.out_features,
+                self.perturbation_rank
+                )
+            ), std=1)
+        #section-end
+        #section-start set bias perturbation if applicable
+        if self.bias is not None:
+            self.bias_perturbation=torch.normal(torch.zeros(
+                size=(
+                    batch_size,
+                    self.out_features
+                    )
+            ), std=1)
+        #section-end
+    #section-end
+    def egg_grad(self, loss_scores): #section-start
+        #section-start """
+        """
+        Uses the batchwise scores to produce the gradient estimates!
+        arguments:
+            loss_scores: Tensor: (batch_size)
+        """
+        #section-end
+        weight.grad = (
+            (1/self.perturbation_stdev)*
+            torch.repeat_interleave(loss_scores)
+        )
+        #TODO
+            
+    #section-end
 #section-end
 #section-start ending phrase
 print("Serpent praise")
