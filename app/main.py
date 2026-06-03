@@ -1,9 +1,31 @@
+#section-start notes
+
+    #TODO move todo list to NOTES file NOTES
+
+    #TODO finish EggLinear
+        #TODO make the forward use the perterbations.
+        #TODO implement the egg_grad function.
+        #TODO make the perturb function perturb symetrically.
+
+    #TODO create EggBatchNorm
+
+    #TODO Make Egg optimizer
+    #TODO Validate egg optimizer
+
+    #TODO Ensure Egg classes do not interfere with regular gradient decent.
+
+    #TODO run VAE Test
+
+    #RULE all tensors used in broadcast operations must have an equal dimensionality.
+    #RULE assert check dimensions after complicated matrix operaions.
+
+#section-end
 #section-start setup
 print("Hello World!")
 import math
 import torch
 import torchvision
-from torch import Tensor
+from torch import Tensor, Shape
 from torch.nn import functional as F, init, Module
 from torch.nn.parameter import Parameter, Uninitializ
 from Datasets import MNIST
@@ -11,7 +33,7 @@ print("preload complete")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device loaded:" + repr(device))
 #section-end
-class EggLinear(Module): #section-start
+class EggLinear(Module): #section-start #section-start
     #section-start """
     r"""Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.
 
@@ -50,20 +72,17 @@ class EggLinear(Module): #section-start
         torch.Size([128, 30])
     """
     #section-end
-    #TODO make the forward use the perterbations.
-    #TODO implement the egg_grad function.
-    #TODO STRETCH make the perturb function perturb symetrically.
-    #TODO ensure all of your tensors are full dimensional to avoid broadcast ambiguity.
     #section-start attributes
     __constants__ = ["in_features", "out_features"]
     in_features: int # m
     out_features: int # n
     weight: Tensor # m x n
-    perturbation_rank: int # r
-    perturbation_stdev: float # sigma
-    A_perturbation: Tensor # batch_size x m x r
-    B_perturbation: Tensor # batch_size x n x r
+    E_perturbation_rank: int # r
+    E_perturbation_stdev: float # sigma
+    E_A_perturbation: Tensor # batch_size x m x r
+    E_B_perturbation: Tensor # batch_size x n x r
     bias_perturbation: Tensor # batch_size x n
+    bias_perturbation_stdev: float # sigma
     #section-end
     def __init__( #section-start
         self,
@@ -150,20 +169,158 @@ class EggLinear(Module): #section-start
             ), std=1)
         #section-end
     #section-end
-    def egg_grad(self, loss_scores): #section-start
+    def egg_grad(self, loss): #section-start
         #section-start """
         """
         Uses the batchwise scores to produce the gradient estimates!
         arguments:
-            loss_scores: Tensor: (batch_size)
+            loss: Tensor: (batch_size)
         """
         #section-end
-        weight.grad = (
-            (1/self.perturbation_stdev)*
-            torch.repeat_interleave(loss_scores)
-        )
         #TODO
-            
+#section-end
+#section-end
+def bake_matrix_perturbation( #section-start
+    #section-start args
+    *,
+    A_perturbation,
+    B_perturbation,
+    perturbation_stdev,
+    loss
+):
+    #section-end
+    #section-start """
+    """
+    turns a batch of matrix perturbations and their associated losses into an estimate of the loss gradient around the perturbed point.
+
+    This corresponds to the gradient estimator step in the associated documentation.
+    
+    Args:
+
+    A_perturbation - Tensor batch_size x m x r
+    B_perturbation - Tensor batch_size x n x r
+    perturbation_stdev - float
+    loss - Tensor batch_size
+    """
+    #section-end
+    #section-start arange size validation
+    batch_size = A_perturbation.shape[0]
+    m = A_perturbation.shape[1]
+    r = A_perturbation.shape[2]
+    n = B_perturbation.shape[1]
+    #section-start validate input sizes
+    assert len(A_perturbation.size) == 3
+    assert B_perturbation.shape[0] == batch_size
+    assert B_perturbation.shape[2] == r
+    assert len(B_perturbation.size) == 3
+    assert loss.shape[0] == batch_size
+    assert len(loss.shape) == 1
+    #section-end
+    #section-end
+    #section-start make intermediate matricies
+    #section-start produce the A megamatrix
+    #section-start construct matrix
+    A_megamatrix = A_perturbation.permute(1, 0, 2)
+    A_megamatrix = A_megamatrix.flatten(start_dim=1, end_dim=2)
+    #section-end
+    #section-start validate matrix size
+    assert A_megamatrix.shape[0] == m
+    assert A_megamatrix.shape[1] == r * batch_size
+    assert len(A_megamatrix.shape) == 2
+    #section-end
+    #section-end
+    #section-start produce the B megamatrix
+    #section-start construct matrix
+    B_megamatrix = B_perturbation.permute(0, 2, 1)
+    B_megamatrix = B_megamatrix.flatten(start_dim=0, end_dim=1)
+    #section-end
+    #section-start validate matrix size
+    assert B_megamatrix.shape[0] == r * batch_size
+    assert B_megamatrix.shape[1] == n
+    assert len(B_megamatrix.shape) == 2
+    #section-end
+    #section-end
+    #section-start produce the loss matrix
+    #section-start construct matrix
+    #TODO fix this. It should have a repetition in here somewhere.
+    loss_matrix = loss.reshape((1,-1))
+    #section-end
+    #section-start validate matrix size
+    assert loss_matrix.shape[0] == 1
+    assert loss_matrix.shape[1] == r * batch_size
+    assert len(loss_matrix.shape) == 2
+    #section-end
+    #section-end
+    #section-end
+    #section-start produce gradient estimate
+    #section-start compute matrix
+    gradient_estimate = (
+        (-1/(batch_size*perturbation_stdev)) *
+        (
+            (A_megamatrix*loss_matrix) @
+            B_megamatrix
+        )
+    )
+    #section-end
+    #section-start validate matrix size
+    assert gradient_estimate.size[0] = m
+    assert gradient_estimate.size[1] = n
+    assert len(gradient_estimate.size) == 2
+    #section-end
+    #section-end
+    #section-start return gradient estimate
+    return gradient_estimate
+    #section-end
+#section-end
+def bake_vector_perturbation( #section-start
+    #section-start args
+    perturbation,
+    perturbation_stdev,
+    loss
+):
+    #section-end
+    #section-start """
+    """
+    turns a batch of vector perturbations and their associated losses into an estimate of the loss gradient around the perturbed  point.
+
+    This corresponds to the gradient estimator step in the associated documention.
+
+    Args:
+
+    perturbation - Tensor batch_size x n
+    perturbation_stdev - float
+    loss - Tensor batchsize
+    """
+    #section-end
+    #section-start set up validation
+    batch_size = perturbation.size[0]
+    n = perturbation.size[1]
+    assert len(perturbation.size) == 2
+    assert loss_scores.size[0] == batch_size
+    assert len(loss_scores.size) == 1
+    #section-end
+    #section-start produce the loss matrix
+    #section-start construct matrix
+    loss_matrix = loss.reshape((-1,1))
+    #section-end
+    #section-start validate matrix size
+    assert loss_matrix.shape[0] == 1
+    assert loss_matrix.shape[1] == batch_size
+    assert len(loss_matrix.size) == 2
+    #section-end
+    #section-end
+    #section-start make the gradient estimate
+    gradient_estimate = (
+        (-1/(perturbation_stdev*batch_size)) *
+        (loss_matrix * perturbation).sum(dim=0)
+    )
+    #section-start validate matrix size
+    assert gradient_estimate.size[0] == n
+    assert len(gradient_estimate.size) == 1
+    #section-end
+    #section-end
+    #section-start return gradient estimate
+    return gradient_estimate
     #section-end
 #section-end
 #section-start ending phrase
