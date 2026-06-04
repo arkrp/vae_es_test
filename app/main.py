@@ -19,6 +19,15 @@
     #RULE all tensors used in broadcast operations must have an equal dimensionality.
     #RULE assert check dimensions after complicated matrix operaions.
 
+    #NOTE torch computes its forward with y = xM^{T} + b. This is admittedly good design, but I would like to clarify that my perterbations are relative to M rather than to M^{T} for this reason I am going do some transposing to make the adding perterbation in the forward pass work. Specifically
+    #y = ((M + sE) @ x^{T})^{T} + b
+    #y = (M @ x^{T})^{T} + s(E @ x^{T})^{T} + b
+    #y = x@(M^{T}) + s(E @ x^{T})^{T} + b
+    #y = F.linear(x, M, s(E @ x^{T})^{T} + b))
+    #Where E is the perturbation, M is the weight matrix, and s is the perturbation standard deviation.
+
+    #TODO Recheck math. The negative sign in the math doesn't make intuitive sense. Isn't that the wrong direction?
+
 #section-end
 #section-start setup
 print("Hello World!")
@@ -33,7 +42,7 @@ print("preload complete")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device loaded:" + repr(device))
 #section-end
-class EggLinear(Module): #section-start #section-start
+class EggLinear(Module): #section-start
     #section-start """
     r"""Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.
 
@@ -204,10 +213,12 @@ def bake_matrix_perturbation( #section-start
     """
     #section-end
     #section-start arange size validation
+    #section-start record input sizes
     batch_size = A_perturbation.shape[0]
     m = A_perturbation.shape[1]
     r = A_perturbation.shape[2]
     n = B_perturbation.shape[1]
+    #section-end
     #section-start validate input sizes
     assert len(A_perturbation.size) == 3
     assert B_perturbation.shape[0] == batch_size
@@ -242,8 +253,7 @@ def bake_matrix_perturbation( #section-start
     #section-end
     #section-start produce the loss matrix
     #section-start construct matrix
-    #TODO fix this. It should have a repetition in here somewhere.
-    loss_matrix = loss.reshape((1,-1))
+    loss_matrix = loss.repeat_interleave(r).reshape((1,-1))
     #section-end
     #section-start validate matrix size
     assert loss_matrix.shape[0] == 1
@@ -255,7 +265,7 @@ def bake_matrix_perturbation( #section-start
     #section-start produce gradient estimate
     #section-start compute matrix
     gradient_estimate = (
-        (-1/(batch_size*perturbation_stdev)) *
+        (-1/(batch_size*perturbation_stdev*torch.sqrt(r))) *
         (
             (A_megamatrix*loss_matrix) @
             B_megamatrix
@@ -321,6 +331,48 @@ def bake_vector_perturbation( #section-start
     #section-end
     #section-start return gradient estimate
     return gradient_estimate
+    #section-end
+#section-end
+def multiply_by_egg( #section-start
+#section-start args
+    *,
+    A_perturbation,
+    B_perturbation,
+    vector
+):
+#section-end
+#section-start """
+"""
+calculates E@x. As in the matrix E times the vector x. Takes in x as a one dimensional vector instea of a 2 so I guess it really computse E@x^{T}? yeah. but then it gives it back as a one vector so its really (E@x^{T})^{T} which is exacly what the equation calls for so good.
+
+Args
+A_perturbation - Tensor batch_size x m x r
+B_perturbation - Tensor batch_size x n x r
+vector - Tensor batch_size x n
+"""
+#section-end
+    #section-start set up validation
+    #section-start intuit input size
+    batch_size = A_perturbutaion.size[0]
+    m = A_perturbation.size[1]
+    r = A_perturbation.size[2]
+    n = B_Perturbation.size[1]
+    #section-end
+    #section-start validate input size
+    assert len(A_perturbation.size) == 3
+    assert B_perturbation.size[0] == batch_size
+    assert B_perturbation.size[2] == r
+    assert len(B_perturbation.size) == 3
+    #section-end
+    #section-end
+    #section-start calculate result
+    column_vector = vector.reshape(batch_size, n, 1)
+    B_perturbation_transpose = B_permutation.permute(0,2,1)
+    result = A_perturbation@(B_perturbation_transpose@column_vector)
+    flattened_result = result.reshape(batch_size, m)
+    #section-end
+    #section-start return result
+    return flattened_result
     #section-end
 #section-end
 #section-start ending phrase
