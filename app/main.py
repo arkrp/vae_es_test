@@ -3,9 +3,9 @@
     #TODO move todo list to NOTES file NOTES
 
     #TODO finish EggLinear
-        #TODO make the forward use the perterbations.
-        #TODO implement the egg_grad function.
-        #TODO make the perturb function perturb symetrically.
+        #DONE make the forward use the perterbations.
+        #DONE implement the egg_grad function.
+        #STRETCH make the perturb function perturb symetrically.
 
     #TODO create EggBatchNorm
 
@@ -26,7 +26,8 @@
     #y = F.linear(x, M, s(E @ x^{T})^{T} + b))
     #Where E is the perturbation, M is the weight matrix, and s is the perturbation standard deviation.
 
-    #TODO Recheck math. The negative sign in the math doesn't make intuitive sense. Isn't that the wrong direction?
+    #TODO PARTIALLY DONE Recheck math. The negative sign in the math doesn't make intuitive sense. Isn't that the wrong direction?
+    #UPDATE yeah the paper doesn't have the negative in it. I mist have messed up somewhere. Ah well. Don't really matter. I'm just gonna remove the negative
 
 #section-end
 #section-start setup
@@ -94,6 +95,7 @@ class EggLinear(Module): #section-start
     bias_perturbation_stdev: float # sigma
     #section-end
     def __init__( #section-start
+        #section-start args
         self,
         in_features: int,
         out_features: int,
@@ -101,9 +103,12 @@ class EggLinear(Module): #section-start
         device=None,
         dtype=None,
         *,
-        perturbation_rank: int
-        perturbation_stdev: float
+        E_perturbation_rank: int,
+        E_perturbation_stdev: float,
+        bias_perturbation_stdev: float
     ) -> None:
+        #section-end
+        #section-start initialize the primary attributes
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.in_features = in_features
@@ -116,8 +121,12 @@ class EggLinear(Module): #section-start
         else:
             self.register_parameter("bias", None)
         self.reset_parameters()
-        self.perturbation_rank = perturbation_rank
-        self.perturbation_stdev = perturbation_stdev
+        #section-end
+        #section-start load perturbation based attributes
+        self.E_perturbation_rank = E_perturbation_rank
+        self.E_perturbation_stdev = E_perturbation_stdev
+        self.bias_perturbation_stdev = bias_perturbation_stdev
+        #section-end
     #section-end
     def reset_parameters(self) -> None: #section-start
         """
@@ -136,7 +145,14 @@ class EggLinear(Module): #section-start
         """
         Runs the forward pass.
         """
-        return F.linear(input, self.weight, self.bias)
+        return F.linear(
+            input,
+            self.weight,
+            multiply_by_egg(
+                A_perturbation=self.A_perturbation,
+                B_perturbation=self.B_perturbation,
+                vector=input) +
+            self.bias)
     #section-end
     def extra_repr(self) -> str: #section-start
         """
@@ -181,12 +197,21 @@ class EggLinear(Module): #section-start
     def egg_grad(self, loss): #section-start
         #section-start """
         """
-        Uses the batchwise scores to produce the gradient estimates!
+        shoves the egg gradient estimates into the parameter gradients so the torch optimizers can fiddle with em.
         arguments:
             loss: Tensor: (batch_size)
         """
+        self.weight.grad = bake_matrix_perturbation(
+            A_perturbation=self.A_perturbation,
+            B_perturbation=self.B_perturbation,
+            perturbation_stdev=self.perturbation_stdev,
+            loss=loss)
+        if(self.bias is not None):
+            self.bias.grad = bake_vector_perturbation(
+                perturbation=self.bias_perturbation,
+                perturbation_stdev=self.bias_perturbation_stdev,
+                loss=loss)
         #section-end
-        #TODO
 #section-end
 #section-end
 def bake_matrix_perturbation( #section-start
@@ -265,7 +290,7 @@ def bake_matrix_perturbation( #section-start
     #section-start produce gradient estimate
     #section-start compute matrix
     gradient_estimate = (
-        (-1/(batch_size*perturbation_stdev*torch.sqrt(r))) *
+        (1.0/(batch_size*perturbation_stdev*torch.sqrt(r))) *
         (
             (A_megamatrix*loss_matrix) @
             B_megamatrix
@@ -321,7 +346,7 @@ def bake_vector_perturbation( #section-start
     #section-end
     #section-start make the gradient estimate
     gradient_estimate = (
-        (-1/(perturbation_stdev*batch_size)) *
+        (1.0/(perturbation_stdev*batch_size)) *
         (loss_matrix * perturbation).sum(dim=0)
     )
     #section-start validate matrix size
@@ -363,6 +388,9 @@ vector - Tensor batch_size x n
     assert B_perturbation.size[0] == batch_size
     assert B_perturbation.size[2] == r
     assert len(B_perturbation.size) == 3
+    assert vector.size[0] == batch_size
+    assert vector.size[1] == n
+    assert len(vector.size) == 2
     #section-end
     #section-end
     #section-start calculate result
