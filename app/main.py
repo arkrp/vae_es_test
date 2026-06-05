@@ -35,10 +35,10 @@ print("Hello World!")
 import math
 import torch
 import torchvision
-from torch import Tensor, Shape
+from torch import Tensor
+from torch.optim import Adam
 from Datasets import MNIST
 from EggModule import EggLinear
-from BasicTraining import train_loop
 print("preload complete")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device loaded:" + repr(device))
@@ -60,15 +60,16 @@ def main(): #section-start
     optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
     batch_size = 32
     print("Begining grad optimization test. Loss should go down.")
-    for i in range(100):
-        input_tensor = torch.normal(torch.zeros(size=(batch_size,10)), stdev=1)
-        desired_output_tensor = torch.arange(10).reshape(10,1)
+    for i in range(10000):
+        input_tensor = torch.normal(torch.zeros(size=(batch_size, 10)), std=1)
+        desired_output_tensor = torch.arange(10).reshape(1,10)
         output_tensor = model(input_tensor)
         loss = torch.sum(torch.pow(desired_output_tensor-output_tensor,2))
         optimizer.zero_grad()
-        loss.backwards()
+        loss.backward()
         optimizer.step()
-        print("Iteration: (" + i + ") Loss: (" + loss + ")")
+        if i%1000==0:
+            print("Iteration: (" + str(i) + ") Loss: (" + str(loss) + ")")
     print("Test Complete")
     #section-start ending phrase
     print("Serpent praise")

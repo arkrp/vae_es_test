@@ -1,8 +1,8 @@
-from torch.nn.parameter import Parameter, Uninitializ
+from torch.nn.parameter import Parameter
 from torch.nn import functional as F, init, Module
 import math
 import torch
-from torch import Tensor, Shape
+from torch import Tensor
 #section-start define modules
 class EggLinear(Module): #section-start
     #section-start """
@@ -83,37 +83,11 @@ class EggLinear(Module): #section-start
             self.register_parameter("bias", None)
         self.reset_parameters()
         #section-end
-        #section-start load perturbation based attributes
+        #section-start prep for perturbation.
         self.E_perturbation_rank = E_perturbation_rank
         self.E_perturbation_stdev = E_perturbation_stdev
         self.bias_perturbation_stdev = bias_perturbation_stdev
-        #section-start set A perturbation
-        self.A_perturbation = torch.zeros(
-            size=(
-                batch_size,
-                self.in_features,
-                self.perturbation_rank
-                )
-            )
-        #section-end
-        #section-start set B perturbation
-        self.B_perturbation = torch.zeros(
-            size=(
-                batch_size,
-                self.out_features,
-                self.perturbation_rank
-                )
-            )
-        #section-end
-        #section-start set bias perturbation if applicable
-        if self.bias is not None:
-            self.bias_perturbation=torch.zeros(
-                size=(
-                    batch_size,
-                    self.out_features
-                    )
-            )
-        #section-end
+        self.reset_perturbation()
         #section-end
     #section-end
     def reset_parameters(self) -> None: #section-start
@@ -133,14 +107,20 @@ class EggLinear(Module): #section-start
         """
         Runs the forward pass.
         """
-        return F.linear(
-            input,
-            self.weight,
-            multiply_by_egg(
-                A_perturbation=self.A_perturbation,
-                B_perturbation=self.B_perturbation,
-                vector=input) +
-            self.bias)
+        if self.E_A_perturbation is None:
+            return F.linear(
+                input,
+                self.weight,
+                self.bias)
+        else:
+            return F.linear(
+                input,
+                self.weight,
+                multiply_by_egg(
+                    A_perturbation=self.E_A_perturbation,
+                    B_perturbation=self.E_B_perturbation,
+                    vector=input) +
+                self.bias)
     #section-end
     def extra_repr(self) -> str: #section-start
         """
@@ -180,6 +160,16 @@ class EggLinear(Module): #section-start
                     self.out_features
                     )
             ), std=1)
+        #section-end
+    #section-end
+    def reset_perturbation(self) -> None: #section-start
+        """
+        Erase all perturbations, making this act like a standard linear layer again.
+        """
+        #section-start set defaut perturbations
+        self.E_A_perturbation = None
+        self.E_B_perturbation = None
+        self.bias_perturbation = None
         #section-end
     #section-end
     def egg_grad(self, loss): #section-start
@@ -286,8 +276,8 @@ def bake_matrix_perturbation( #section-start
     )
     #section-end
     #section-start validate matrix size
-    assert gradient_estimate.size[0] = m
-    assert gradient_estimate.size[1] = n
+    assert gradient_estimate.size[0] == m
+    assert gradient_estimate.size[1] == n
     assert len(gradient_estimate.size) == 2
     #section-end
     #section-end
@@ -354,16 +344,16 @@ def multiply_by_egg( #section-start
     vector
 ):
 #section-end
-#section-start """
-"""
-calculates E@x. As in the matrix E times the vector x. Takes in x as a one dimensional vector instea of a 2 so I guess it really computse E@x^{T}? yeah. but then it gives it back as a one vector so its really (E@x^{T})^{T} which is exacly what the equation calls for so good.
+    #section-start """
+    """
+    calculates E@x. As in the matrix E times the vector x. Takes in x as a one dimensional vector instea of a 2 so I guess it really computse E@x^{T}? yeah. but then it gives it back as a one vector so its really (E@x^{T})^{T} which is exacly what the equation calls for so good.
 
-Args
-A_perturbation - Tensor batch_size x m x r
-B_perturbation - Tensor batch_size x n x r
-vector - Tensor batch_size x n
-"""
-#section-end
+    Args
+    A_perturbation - Tensor batch_size x m x r
+    B_perturbation - Tensor batch_size x n x r
+    vector - Tensor batch_size x n
+    """
+    #section-end
     #section-start set up validation
     #section-start intuit input size
     batch_size = A_perturbutaion.size[0]
