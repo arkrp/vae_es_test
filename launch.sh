@@ -1,12 +1,6 @@
 podman container rm vae_es_test
 podman build -t vae_es_test .
 podman run -it\
-    --privileged \
-    --net=host \
-    --pid=host \
-    --ipc=host \
-    --uts=host \
-    --cgroupns=host \
     --device /dev/kfd:/dev/kfd \
     --device /dev/dri:/dev/dri \
     --group-add keep-groups \
