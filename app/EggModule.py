@@ -1,8 +1,10 @@
+#section-start import stuff
 from torch.nn.parameter import Parameter
 from torch.nn import functional as F, init, Module
 import math
 import torch
 from torch import Tensor
+#section-end
 #section-start define modules
 class EggLinear(Module): #section-start
     #section-start """
@@ -135,22 +137,22 @@ class EggLinear(Module): #section-start
         """
         #section-end
         #section-start set A perturbation
-        self.A_perturbation = torch.normal(torch.zeros(
+        self.E_A_perturbation = torch.normal(torch.zeros(
             size=(
                 batch_size,
                 self.in_features,
-                self.perturbation_rank
+                self.E_perturbation_rank
                 )
-            ), std=1)
+            ), std=self.E_perturbation_stdev)
         #section-end
         #section-start set B perturbation
-        self.B_perturbation = torch.normal(torch.zeros(
+        self.E_B_perturbation = torch.normal(torch.zeros(
             size=(
                 batch_size,
                 self.out_features,
-                self.perturbation_rank
+                self.E_perturbation_rank
                 )
-            ), std=1)
+            ), std=self.E_perturbation_stdev)
         #section-end
         #section-start set bias perturbation if applicable
         if self.bias is not None:
@@ -159,7 +161,7 @@ class EggLinear(Module): #section-start
                     batch_size,
                     self.out_features
                     )
-            ), std=1)
+            ), std=self.bias_perturbation_stdev)
         #section-end
     #section-end
     def reset_perturbation(self) -> None: #section-start
@@ -180,9 +182,9 @@ class EggLinear(Module): #section-start
             loss: Tensor: (batch_size)
         """
         self.weight.grad = bake_matrix_perturbation(
-            A_perturbation=self.A_perturbation,
-            B_perturbation=self.B_perturbation,
-            perturbation_stdev=self.perturbation_stdev,
+            A_perturbation=self.E_A_perturbation,
+            B_perturbation=self.E_B_perturbation,
+            perturbation_stdev=self.E_perturbation_stdev,
             loss=loss)
         if(self.bias is not None):
             self.bias.grad = bake_vector_perturbation(
@@ -191,6 +193,49 @@ class EggLinear(Module): #section-start
                 loss=loss)
         #section-end
 #section-end
+#section-end
+class EggVector(Module): #section-start
+    #section-start """
+    """
+    just a vector which is capable of being eggroll gradient updated
+    """
+    #section-end
+    #section-start attribute
+    _num_features: int
+    _vector: Tensor
+    _perturbation: Tensor
+    _perturbation_stdev: float
+    #section-end
+    def __init__(self, num_features, perturbation_stdev): #section-start
+        self._num_features = num_features
+        self._perturbation_stdev = perturbation_stdev
+        self.reset_parameters()
+    #section-end
+    def reset_parameters(self) -> None: #section-start
+        self._vector = Parameter(torch.normal(
+            mean=torch.zeros(self.num_features),
+            std=1
+        ))
+    #section-end
+    def forward(self): #section-start
+        return(_vector)
+    #section-end
+    def perturb(self, batch_size) -> None: #section-start
+        self._perturbation = Parameter(torch.normal(
+            mean=torch.zeros(size=(batch_size, self.num_features)),
+            std=self._perturbation_stdev
+        ))
+    #section-end
+    def reset_perturbation(self) -> None: #section-start
+        self._perturbation = torch.zeros(size=(batch_size, self.num_features))
+    #section-end
+    def egg_grad(self, loss) -> None:
+        grad_estimate = bake_vector_perturbation(
+            perturbation=self._perturbation,
+            perturbation_stdev=self._perturbation_stdev,
+            loss=loss)
+        self._vector.grad=grad_estimate
+        self._vector.grad=torch.ones_like(self._vector) #TODO remove
 #section-end
 def bake_matrix_perturbation( #section-start
     #section-start args
@@ -223,10 +268,10 @@ def bake_matrix_perturbation( #section-start
     n = B_perturbation.shape[1]
     #section-end
     #section-start validate input sizes
-    assert len(A_perturbation.size) == 3
+    assert len(A_perturbation.shape) == 3
     assert B_perturbation.shape[0] == batch_size
     assert B_perturbation.shape[2] == r
-    assert len(B_perturbation.size) == 3
+    assert len(B_perturbation.shape) == 3
     assert loss.shape[0] == batch_size
     assert len(loss.shape) == 1
     #section-end
@@ -268,7 +313,7 @@ def bake_matrix_perturbation( #section-start
     #section-start produce gradient estimate
     #section-start compute matrix
     gradient_estimate = (
-        (1.0/(batch_size*perturbation_stdev*torch.sqrt(r))) *
+        (1.0/(batch_size*perturbation_stdev*math.sqrt(r))) *
         (
             (A_megamatrix*loss_matrix) @
             B_megamatrix
@@ -276,9 +321,9 @@ def bake_matrix_perturbation( #section-start
     )
     #section-end
     #section-start validate matrix size
-    assert gradient_estimate.size[0] == m
-    assert gradient_estimate.size[1] == n
-    assert len(gradient_estimate.size) == 2
+    assert gradient_estimate.shape[0] == m
+    assert gradient_estimate.shape[1] == n
+    assert len(gradient_estimate.shape) == 2
     #section-end
     #section-end
     #section-start return gradient estimate
@@ -306,20 +351,20 @@ def bake_vector_perturbation( #section-start
     """
     #section-end
     #section-start set up validation
-    batch_size = perturbation.size[0]
-    n = perturbation.size[1]
-    assert len(perturbation.size) == 2
-    assert loss_scores.size[0] == batch_size
-    assert len(loss_scores.size) == 1
+    batch_size = perturbation.shape[0]
+    n = perturbation.shape[1]
+    assert len(perturbation.shape) == 2
+    assert loss.shape[0] == batch_size
+    assert len(loss.shape) == 1
     #section-end
     #section-start produce the loss matrix
     #section-start construct matrix
     loss_matrix = loss.reshape((-1,1))
     #section-end
     #section-start validate matrix size
-    assert loss_matrix.shape[0] == 1
-    assert loss_matrix.shape[1] == batch_size
-    assert len(loss_matrix.size) == 2
+    assert loss_matrix.shape[0] == batch_size
+    assert loss_matrix.shape[1] == 1
+    assert len(loss_matrix.shape) == 2
     #section-end
     #section-end
     #section-start make the gradient estimate
@@ -328,8 +373,8 @@ def bake_vector_perturbation( #section-start
         (loss_matrix * perturbation).sum(dim=0)
     )
     #section-start validate matrix size
-    assert gradient_estimate.size[0] == n
-    assert len(gradient_estimate.size) == 1
+    assert gradient_estimate.shape[0] == n
+    assert len(gradient_estimate.shape) == 1
     #section-end
     #section-end
     #section-start return gradient estimate
@@ -356,24 +401,24 @@ def multiply_by_egg( #section-start
     #section-end
     #section-start set up validation
     #section-start intuit input size
-    batch_size = A_perturbutaion.size[0]
-    m = A_perturbation.size[1]
-    r = A_perturbation.size[2]
-    n = B_Perturbation.size[1]
+    batch_size = A_perturbation.shape[0]
+    m = A_perturbation.shape[1]
+    r = A_perturbation.shape[2]
+    n = B_perturbation.shape[1]
     #section-end
     #section-start validate input size
-    assert len(A_perturbation.size) == 3
-    assert B_perturbation.size[0] == batch_size
-    assert B_perturbation.size[2] == r
-    assert len(B_perturbation.size) == 3
-    assert vector.size[0] == batch_size
-    assert vector.size[1] == n
-    assert len(vector.size) == 2
+    assert len(A_perturbation.shape) == 3
+    assert B_perturbation.shape[0] == batch_size
+    assert B_perturbation.shape[2] == r
+    assert len(B_perturbation.shape) == 3
+    assert vector.shape[0] == batch_size
+    assert vector.shape[1] == n
+    assert len(vector.shape) == 2
     #section-end
     #section-end
     #section-start calculate result
     column_vector = vector.reshape(batch_size, n, 1)
-    B_perturbation_transpose = B_permutation.permute(0,2,1)
+    B_perturbation_transpose = B_perturbation.permute(0,2,1)
     result = A_perturbation@(B_perturbation_transpose@column_vector)
     flattened_result = result.reshape(batch_size, m)
     #section-end
