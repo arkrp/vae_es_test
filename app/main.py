@@ -38,7 +38,7 @@ import torchvision
 from torch import Tensor
 from torch.optim import Adam
 from Datasets import MNIST
-from EggModule import EggLinear
+from EggModule import EggVector
 print("preload complete")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device loaded:" + repr(device))
@@ -69,34 +69,29 @@ def grad_test(): #section-start
             print("Iteration: (" + str(i) + ") Loss: (" + str(loss) + ")")
     print("Test Complete")
 #section-end
-def egg_grad_test(): #section-start
+def egg_grad_test_vector(): #section-start
     #section-start make the model
-    model = EggLinear(
-        in_features=3,
-        out_features=3,
-        bias=True,
-        device=None,
-        dtype=None,
-        E_perturbation_rank=2,
-        E_perturbation_stdev=0.01,
-        bias_perturbation_stdev=0.01
+    model = EggVector(
+        num_features=3,
+        perturbation_stdev=0.1
     )
     #section-end
     #section-start grad decent the model
     print("Begining grad optimization test. Loss should go down.")
-    optimizer = Adam(model.parameters(), lr=1e-6, weight_decay=1e-8)
-    batch_size = 128
-    for i in range(100000):
-        print(list(model.parameters()))
+    optimizer = Adam(model.parameters(), lr=5e-4, weight_decay=1e-8)
+    batch_size = 10
+    desired_output_tensor = torch.arange(3)
+    for i in range(20000):
+        #print(list(model.parameters()))
         model.perturb(batch_size)
-        input_tensor = torch.normal(torch.zeros(size=(batch_size, 3)), std=1)
-        desired_output_tensor = torch.zeros(3).reshape(1,3)
-        output_tensor = model(input_tensor)
+        output_tensor = model(batch_size=batch_size)
         loss = torch.sum(torch.pow(desired_output_tensor-output_tensor,2), dim=(1,))
         model.egg_grad(loss)
         optimizer.step()
         if i%1000==0:
             print("Iteration: (" + str(i) + ") AvgLoss: (" + str(torch.sum(loss)/batch_size) + ")")
+    model.reset_perturbation()
+    print("desired output: " + str(desired_output_tensor) + "\ntrained_output: " + str(model(batch_size=1)[0,]))
     print("Test Complete")
     #section-end
 #section-end
@@ -104,7 +99,7 @@ def main(): #section-start
     #section-start print start message
     print("Starting main program")
     #section-end
-    egg_grad_test()
+    egg_grad_test_vector()
     #section-start ending phrase
     print("Serpent praise")
     #section-end

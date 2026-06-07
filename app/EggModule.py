@@ -207,35 +207,57 @@ class EggVector(Module): #section-start
     _perturbation_stdev: float
     #section-end
     def __init__(self, num_features, perturbation_stdev): #section-start
+        super().__init__()
         self._num_features = num_features
         self._perturbation_stdev = perturbation_stdev
         self.reset_parameters()
     #section-end
     def reset_parameters(self) -> None: #section-start
         self._vector = Parameter(torch.normal(
-            mean=torch.zeros(self.num_features),
+            mean=torch.zeros(self._num_features),
             std=1
         ))
     #section-end
-    def forward(self): #section-start
-        return(_vector)
+    def forward(self, *, batch_size): #section-start
+        if self._perturbation is not None:
+            assert self._perturbation.shape[0] == batch_size
+            assert self._perturbation.shape[1] == self._num_features
+            assert len(self._perturbation.shape) == 2
+            return(self._vector + self._perturbation)
+        else:
+            return(
+                self._vector.reshape((1,-1)) +
+                torch.zeros(size=(
+                    batch_size,
+                    self._num_features)))
     #section-end
     def perturb(self, batch_size) -> None: #section-start
-        self._perturbation = Parameter(torch.normal(
-            mean=torch.zeros(size=(batch_size, self.num_features)),
-            std=self._perturbation_stdev
-        ))
+        #section-start perturb symmetrically for even batch size
+        if batch_size%2==0:
+            top = torch.normal(
+                mean=torch.zeros(size=(batch_size//2, self._num_features)),
+                std=self._perturbation_stdev
+            )
+            self._perturbation = torch.cat([top,-top], dim=0)
+        #section-end
+        #section-start perturb random for odd batch size
+        else:
+            self._perturbation = torch.normal(
+                mean=torch.zeros(size=(batch_size, self._num_features)),
+                std=self._perturbation_stdev
+            )
+        #section-end
     #section-end
     def reset_perturbation(self) -> None: #section-start
-        self._perturbation = torch.zeros(size=(batch_size, self.num_features))
+        self._perturbation = None
     #section-end
-    def egg_grad(self, loss) -> None:
+    def egg_grad(self, loss) -> None: #section-start
         grad_estimate = bake_vector_perturbation(
             perturbation=self._perturbation,
             perturbation_stdev=self._perturbation_stdev,
             loss=loss)
         self._vector.grad=grad_estimate
-        self._vector.grad=torch.ones_like(self._vector) #TODO remove
+    #section-end
 #section-end
 def bake_matrix_perturbation( #section-start
     #section-start args
