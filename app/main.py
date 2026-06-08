@@ -38,7 +38,7 @@ import torchvision
 from torch import Tensor
 from torch.optim import Adam
 from Datasets import MNIST
-from EggModule import EggVector
+from EggModule import EggVector, EggMatrix
 print("preload complete")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device loaded:" + repr(device))
@@ -95,11 +95,93 @@ def egg_grad_test_vector(): #section-start
     print("Test Complete")
     #section-end
 #section-end
+def egg_grad_test_matrix(): #section-start
+    #section-start define test constants
+    input_size = 4
+    output_size = 3
+    perturbation_rank = 2
+    #section-end
+    #section-start make the model
+    model = EggMatrix(
+        num_input_features=input_size,
+        num_output_features=output_size,
+        perturbation_rank=perturbation_rank,
+        perturbation_stdev=0.1
+    )
+    #section-end
+    #section-start generate true matrix
+    true_matrix = torch.normal(
+        mean=torch.zeros(
+            size=(
+                output_size,
+                input_size
+        )),
+        std=0.5)
+    #section-end
+    #section-start grad decent the model
+    #section-start announce we are starting
+    print("Begining grad optimization test. Loss should go down.")
+    #section-end
+    #section-start set optimization conditions
+    optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
+    batch_size = 32
+    #section-end
+    #section-start loop to train!
+    for i in range(20000):
+        #section-start generate input
+        input_tensor = torch.normal(
+            mean=torch.zeros(
+                size=(
+                    batch_size,
+                    input_size
+                )
+            ),
+            std=1
+        )
+        #section-end
+        #section-start generate true output
+        true_output = (
+            true_matrix[None, :, :] @
+            input_tensor[:, :, None])
+        true_output = true_output.reshape((
+            batch_size,
+            output_size
+        ))
+        #section-end
+        #section-start perturb the model
+        model.perturb(batch_size)
+        #section-end
+        #section-start generate predicted output
+        output_tensor = model(input_vector=input_tensor)
+        #section-end
+        #section-start aquire the loss
+        loss = torch.sum(torch.pow(true_output-output_tensor,2), dim=(1,))
+        #section-end
+        #section-start estimate gradient with loss
+        model.egg_grad(loss)
+        #section-end
+        #section-start decend the gradient!
+        optimizer.step()
+        #section-end
+        if i%1000==0:
+            print("Iteration: (" + str(i) + ") AvgLoss: (" + str(torch.sum(loss).item()/batch_size) + ")")
+    #section-end
+    #section-start unperturb the model
+    model.reset_perturbation()
+    #section-end
+    #section-start display results in readable way!
+    print("Results. Matricies should look similar.")
+    print("true matrix: " + str(true_matrix))
+    print("trained_output: " + str(model._matrix))
+    print("Test Complete")
+    #section-end
+    #section-end
+#section-end
 def main(): #section-start
     #section-start print start message
     print("Starting main program")
     #section-end
-    egg_grad_test_vector()
+    egg_grad_test_matrix()
     #section-start ending phrase
     print("Serpent praise")
     #section-end

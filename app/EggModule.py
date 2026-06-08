@@ -290,7 +290,7 @@ class EggMatrix(Module): #section-start
         self.reset_parameters()
     #section-end
     def reset_parameters(self) -> None: #section-start
-        self._vector = Parameter(torch.normal(
+        self._matrix = Parameter(torch.normal(
             mean=torch.zeros(
                 size=(
                     self._num_output_features,
@@ -365,7 +365,7 @@ class EggMatrix(Module): #section-start
             #section-start produce A
             A_top = torch.normal(
                 mean=torch.zeros(size=(
-                    batch_size//,
+                    batch_size//2,
                     self._num_output_features,
                     self._perturbation_rank
                 )),
@@ -378,8 +378,8 @@ class EggMatrix(Module): #section-start
             #section-start produce B
             B_top = torch.normal(
                 mean=torch.zeros(size=(
-                    batch_size//,
-                    self._num_output_features,
+                    batch_size//2,
+                    self._num_input_features,
                     self._perturbation_rank
                 )),
                 std=1
@@ -422,11 +422,11 @@ class EggMatrix(Module): #section-start
         grad_estimate = bake_matrix_perturbation(
             A_perturbation=self._A_perturbation,
             B_perturbation=self._B_perturbation,
-            perturbtation_stdev=self._pertubation_stdev,
+            perturbation_stdev=self._perturbation_stdev,
             loss=loss)
         #section-end
         #section-start write estimate to parameter gradient!
-        self._vector.grad=grad_estimate
+        self._matrix.grad=grad_estimate
         #section-end
     #section-end
 #section-end
