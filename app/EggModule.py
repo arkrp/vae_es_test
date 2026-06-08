@@ -6,194 +6,6 @@ import torch
 from torch import Tensor
 #section-end
 #section-start define modules
-class EggLinear(Module): #section-start
-    #section-start """
-    r"""Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.
-
-    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.
-
-    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.
-
-    Args:
-        in_features: size of each input sample
-        out_features: size of each output sample
-        bias: If set to ``False``, the layer will not learn an additive bias.
-            Default: ``True``
-
-    Shape:
-        - Input: :math:`(*, H_\text{in})` where :math:`*` means any number of
-          dimensions including none and :math:`H_\text{in} = \text{in\_features}`.
-        - Output: :math:`(*, H_\text{out})` where all but the last dimension
-          are the same shape as the input and :math:`H_\text{out} = \text{out\_features}`.
-
-    Attributes:
-        weight: the learnable weights of the module of shape
-            :math:`(\text{out\_features}, \text{in\_features})`. The values are
-            initialized from :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})`, where
-            :math:`k = \frac{1}{\text{in\_features}}`
-        bias:   the learnable bias of the module of shape :math:`(\text{out\_features})`.
-                If :attr:`bias` is ``True``, the values are initialized from
-                :math:`\mathcal{U}(-\sqrt{k}, \sqrt{k})` where
-                :math:`k = \frac{1}{\text{in\_features}}`
-
-    Examples::
-
-        >>> m = EggLinear(20, 30)
-        >>> input = torch.randn(128, 20)
-        >>> output = m(input)
-        >>> print(output.size())
-        torch.Size([128, 30])
-    """
-    #section-end
-    #section-start attributes
-    __constants__ = ["in_features", "out_features"]
-    in_features: int # m
-    out_features: int # n
-    weight: Tensor # m x n
-    E_perturbation_rank: int # r
-    E_perturbation_stdev: float # sigma
-    E_A_perturbation: Tensor # batch_size x m x r
-    E_B_perturbation: Tensor # batch_size x n x r
-    bias_perturbation: Tensor # batch_size x n
-    bias_perturbation_stdev: float # sigma
-    #section-end
-    def __init__( #section-start
-        #section-start args
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        device=None,
-        dtype=None,
-        *,
-        E_perturbation_rank: int,
-        E_perturbation_stdev: float,
-        bias_perturbation_stdev: float
-    ) -> None:
-        #section-end
-        #section-start initialize the primary attributes
-        factory_kwargs = {"device": device, "dtype": dtype}
-        super().__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.weight = Parameter(
-            torch.empty((out_features, in_features), **factory_kwargs)
-        )
-        if bias:
-            self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
-        else:
-            self.register_parameter("bias", None)
-        self.reset_parameters()
-        #section-end
-        #section-start prep for perturbation.
-        self.E_perturbation_rank = E_perturbation_rank
-        self.E_perturbation_stdev = E_perturbation_stdev
-        self.bias_perturbation_stdev = bias_perturbation_stdev
-        self.reset_perturbation()
-        #section-end
-    #section-end
-    def reset_parameters(self) -> None: #section-start
-        """
-        Resets parameters based on their initialization used in ``__init__``.
-        """
-        # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
-        # uniform(-1/sqrt(in_features), 1/sqrt(in_features)). For details, see
-        # https://github.com/pytorch/pytorch/issues/57109
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            init.uniform_(self.bias, -bound, bound)
-    #section-end
-    def forward(self, input: Tensor) -> Tensor: #section-start
-        """
-        Runs the forward pass.
-        """
-        if self.E_A_perturbation is None:
-            return F.linear(
-                input,
-                self.weight,
-                self.bias)
-        else:
-            return F.linear(
-                input,
-                self.weight,
-                multiply_by_egg(
-                    A_perturbation=self.E_A_perturbation,
-                    B_perturbation=self.E_B_perturbation,
-                    vector=input) +
-                self.bias)
-    #section-end
-    def extra_repr(self) -> str: #section-start
-        """
-        Return the extra representation of the module.
-        """
-        return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}"
-    #section-end
-    def perturb(self, batch_size) -> None: #section-start
-        #section-start """
-        """
-        Sample the perturbation matricies/vectors for a eggroll learning step.
-        """
-        #section-end
-        #section-start set A perturbation
-        self.E_A_perturbation = torch.normal(torch.zeros(
-            size=(
-                batch_size,
-                self.in_features,
-                self.E_perturbation_rank
-                )
-            ), std=self.E_perturbation_stdev)
-        #section-end
-        #section-start set B perturbation
-        self.E_B_perturbation = torch.normal(torch.zeros(
-            size=(
-                batch_size,
-                self.out_features,
-                self.E_perturbation_rank
-                )
-            ), std=self.E_perturbation_stdev)
-        #section-end
-        #section-start set bias perturbation if applicable
-        if self.bias is not None:
-            self.bias_perturbation=torch.normal(torch.zeros(
-                size=(
-                    batch_size,
-                    self.out_features
-                    )
-            ), std=self.bias_perturbation_stdev)
-        #section-end
-    #section-end
-    def reset_perturbation(self) -> None: #section-start
-        """
-        Erase all perturbations, making this act like a standard linear layer again.
-        """
-        #section-start set defaut perturbations
-        self.E_A_perturbation = None
-        self.E_B_perturbation = None
-        self.bias_perturbation = None
-        #section-end
-    #section-end
-    def egg_grad(self, loss): #section-start
-        #section-start """
-        """
-        shoves the egg gradient estimates into the parameter gradients so the torch optimizers can fiddle with em.
-        arguments:
-            loss: Tensor: (batch_size)
-        """
-        self.weight.grad = bake_matrix_perturbation(
-            A_perturbation=self.E_A_perturbation,
-            B_perturbation=self.E_B_perturbation,
-            perturbation_stdev=self.E_perturbation_stdev,
-            loss=loss)
-        if(self.bias is not None):
-            self.bias.grad = bake_vector_perturbation(
-                perturbation=self.bias_perturbation,
-                perturbation_stdev=self.bias_perturbation_stdev,
-                loss=loss)
-        #section-end
-#section-end
-#section-end
 class EggVector(Module): #section-start
     #section-start """
     """
@@ -206,7 +18,7 @@ class EggVector(Module): #section-start
     _perturbation: Tensor
     _perturbation_stdev: float
     #section-end
-    def __init__(self, num_features, perturbation_stdev): #section-start
+    def __init__(self, *, num_features, perturbation_stdev=0.1): #section-start
         super().__init__()
         self._num_features = num_features
         self._perturbation = None
@@ -279,12 +91,21 @@ class EggMatrix(Module): #section-start
     _perturbation_rank: int
     _perturbation_stdev: float
     #section-end
-    def __init__(self, *, num_input_features, num_output_features, perturbation_rank, perturbation_stdev): #section-start
+    def __init__(self, *, num_input_features, num_output_features, perturbation_rank=None, perturbation_stdev=0.1): #section-start
         super().__init__()
         self._num_input_features = num_input_features
         self._num_output_features = num_output_features
         self._A_perturbation = None
         self._B_perturbation = None
+        #section-start autoset appropriate training rank if unspecified
+        if(perturbation_rank==None):
+            shortest_dim = max(
+                [num_input_features, num_output_features])
+            perturbation_rank = math.ceil(
+                math.pow(
+                    shortest_dim,
+                    1/3))
+        #section-end
         self._perturbation_rank = perturbation_rank
         self._perturbation_stdev = perturbation_stdev
         self.reset_parameters()
@@ -299,7 +120,7 @@ class EggMatrix(Module): #section-start
             std=1
         ))
     #section-end
-    def forward(self, *, input_vector): #section-start
+    def forward(self, input_vector): #section-start
         #section-start """
         """
         Multiplies a vector by the matrix.
@@ -351,13 +172,13 @@ class EggMatrix(Module): #section-start
             )
             #section-end
         #section-end
-            #section-start return the result
-            return (output_column_vector.
-                transpose(1,2).
-                reshape((
-                    batch_size,
-                    self._num_output_features)))
-            #section-end
+        #section-start return the result
+        return (output_column_vector.
+            transpose(1,2).
+            reshape((
+                batch_size,
+                self._num_output_features)))
+        #section-end
     #section-end
     def perturb(self, batch_size) -> None: #section-start
         #section-start perturb symmetrically for even batch size
@@ -429,6 +250,89 @@ class EggMatrix(Module): #section-start
         self._matrix.grad=grad_estimate
         #section-end
     #section-end
+#section-end
+class EggAffine(Module): #section-start
+    #section-start """
+    """
+    Basic affine layer which accepts egg optimization.
+    """
+    #section-end
+    #section-start attributes
+    bias_module: EggVector
+    linear_module: EggMatrix
+    num_input_features: int
+    num_output_features: int
+    #section-end
+    def __init__(self, *, num_input_features, num_output_features): #section-start
+        super().__init__()
+        self.num_input_features = num_input_features
+        self.num_output_features = num_output_features
+        self.reset_parameters()
+    #section-end
+    def reset_parameters(self) -> None: #section-start
+        self.bias_module = EggVector(
+            num_features=self.num_output_features)
+        self.linear_module = EggMatrix(
+            num_input_features=self.num_input_features,
+            num_output_features=self.num_output_features)
+    #section-end
+    def forward(self, x): #section-start
+        #section-start validate input
+        batch_size = x.shape[0]
+        assert x.shape[1] == self.num_input_features
+        assert len(x.shape) == 2
+        #section-end
+        #section-start calculate output
+        retval = self.linear_module(input_vector=x)
+        assert retval is not None
+        retval = retval + self.bias_module(batch_size=batch_size)
+        #section-end
+        #section-start return output!
+        return(retval)
+        #section-end
+    #section-end
+#section-end
+def perturb(batch_size): #section-start
+    #section-start """
+    """
+    This is the way to perturb modules nested in other modules. Just use model.apply(perturb(batch_size))
+    """
+    #section-end
+    def perturb_inner(module): #section-start
+        if(
+            (type(module) is EggMatrix) or
+            (type(module) is EggVector)):
+            module.perturb(batch_size)
+    #section-end
+    return perturb_inner
+#section-end
+def egg_grad(loss): #section-start
+    #section-start """
+    """
+    This is the way to call egg grad in modules nested in other modules. Just use model.apply(egg_grad())
+    """
+    #section-end
+    def egg_grad_inner(module): #section-start
+        if(
+            (type(module) is EggMatrix) or
+            (type(module) is EggVector)):
+            module.egg_grad(loss)
+    #section-end
+    return egg_grad_inner
+#section-end
+def reset_perturbation(): #section-start
+    #section-start """
+    """
+    This is the way to call reset_perturbation in modules nested in other modules. Just use model.apply(reset_perturbation())
+    """
+    #section-end
+    def reset_perturbation_inner(module): #section-start
+        if(
+            (type(module) is EggMatrix) or
+            (type(module) is EggVector)):
+            module.reset_perturbation()
+    #section-end
+    return reset_perturbation_inner
 #section-end
 def bake_matrix_perturbation( #section-start
     #section-start args
