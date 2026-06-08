@@ -209,6 +209,7 @@ class EggVector(Module): #section-start
     def __init__(self, num_features, perturbation_stdev): #section-start
         super().__init__()
         self._num_features = num_features
+        self._perturbation = None
         self._perturbation_stdev = perturbation_stdev
         self.reset_parameters()
     #section-end
@@ -236,7 +237,7 @@ class EggVector(Module): #section-start
         if batch_size%2==0:
             top = torch.normal(
                 mean=torch.zeros(size=(batch_size//2, self._num_features)),
-                std=self._perturbation_stdev
+                std=1.0
             )
             self._perturbation = torch.cat([top,-top], dim=0)
         #section-end
@@ -244,7 +245,7 @@ class EggVector(Module): #section-start
         else:
             self._perturbation = torch.normal(
                 mean=torch.zeros(size=(batch_size, self._num_features)),
-                std=self._perturbation_stdev
+                std=1.0
             )
         #section-end
     #section-end
@@ -252,11 +253,181 @@ class EggVector(Module): #section-start
         self._perturbation = None
     #section-end
     def egg_grad(self, loss) -> None: #section-start
+        #section-start estimate the gradient
         grad_estimate = bake_vector_perturbation(
             perturbation=self._perturbation,
             perturbation_stdev=self._perturbation_stdev,
             loss=loss)
+        #section-end
+        #section-start write the estimate to the parameter grad!
         self._vector.grad=grad_estimate
+        #section-end
+    #section-end
+#section-end
+class EggMatrix(Module): #section-start
+    #section-start """
+    """
+    A matrix which is capable of being eggroll gradient updated. Intended for use in matrix multiplication only.
+    """
+    #section-end
+    #section-start attribute
+    _num_input_features: int
+    _num_output_features: int
+    _matrix: Tensor
+    _A_perturbation: Tensor
+    _B_perturbation: Tensor
+    _perturbation_rank: int
+    _perturbation_stdev: float
+    #section-end
+    def __init__(self, *, num_input_features, num_output_features, perturbation_rank, perturbation_stdev): #section-start
+        super().__init__()
+        self._num_input_features = num_input_features
+        self._num_output_features = num_output_features
+        self._A_perturbation = None
+        self._B_perturbation = None
+        self._perturbation_rank = perturbation_rank
+        self._perturbation_stdev = perturbation_stdev
+        self.reset_parameters()
+    #section-end
+    def reset_parameters(self) -> None: #section-start
+        self._vector = Parameter(torch.normal(
+            mean=torch.zeros(
+                size=(
+                    self._num_output_features,
+                    self._num_input_features)
+            ),
+            std=1
+        ))
+    #section-end
+    def forward(self, *, input_vector): #section-start
+        #section-start """
+        """
+        Multiplies a vector by the matrix.
+        Args:
+        input_vector: Tensor batch_size x num_input_features
+        """
+        #section-end
+        #section-start validate input
+        batch_size = input_vector.shape[0]
+        assert input_vector.shape[1] == self._num_input_features
+        assert len(input_vector.shape) == 2
+        #section-end
+        #section-start shape the input vector into a column
+        input_column_vector = input_vector.reshape((
+                batch_size,
+                self._num_input_features,
+                1
+        ))
+        #section-end
+        #section-start compute the unperturbed part
+        output_column_vector = self._matrix @ input_column_vector
+        #section-end
+        #section-start add in the perturbation part
+        if self._A_perturbation is not None:
+            #section-start validate perturbation sizes
+            assert self._A_perturbation.shape[0] == batch_size
+            assert self._A_perturbation.shape[1] == self._num_output_features
+            assert self._A_perturbation.shape[2] == self._perturbation_rank
+            assert len(self._A_perturbation.shape) == 3
+            assert self._B_perturbation.shape[0] == batch_size
+            assert self._B_perturbation.shape[1] == self._num_input_features
+            assert self._B_perturbation.shape[2] == self._perturbation_rank
+            assert len(self._B_perturbation.shape) == 3
+            #section-end
+            #section-start do the addition
+            output_column_vector = (
+                output_column_vector +
+                (
+                    self._perturbation_stdev /
+                    math.sqrt(self._perturbation_rank)
+                ) *
+                (
+                    self._A_perturbation @
+                    (
+                        self._B_perturbation.transpose(1,2) @
+                        input_column_vector
+                    )
+                )
+            )
+            #section-end
+        #section-end
+            #section-start return the result
+            return (output_column_vector.
+                transpose(1,2).
+                reshape((
+                    batch_size,
+                    self._num_output_features)))
+            #section-end
+    #section-end
+    def perturb(self, batch_size) -> None: #section-start
+        #section-start perturb symmetrically for even batch size
+        if batch_size%2==0:
+            #section-start produce A
+            A_top = torch.normal(
+                mean=torch.zeros(size=(
+                    batch_size//,
+                    self._num_output_features,
+                    self._perturbation_rank
+                )),
+                std=1
+            )
+            self._A_perturbation = torch.cat(
+                tensors=[A_top, -A_top],
+                dim=0)
+            #section-end
+            #section-start produce B
+            B_top = torch.normal(
+                mean=torch.zeros(size=(
+                    batch_size//,
+                    self._num_output_features,
+                    self._perturbation_rank
+                )),
+                std=1
+            )
+            self._B_perturbation = torch.cat(
+                tensors=[B_top, -B_top],
+                dim=0)
+            #section-end
+        #section-end
+        #section-start perturb random for odd batch size
+        else:
+            #section-start produce A
+            self._A_perturbation = torch.normal(
+                mean=torch.zeros(size=(
+                    batch_size,
+                    self._num_output_features,
+                    self._perturbation_rank
+                )),
+                std=1
+            )
+            #section-end
+            #section-start produce B
+            self._B_perturbation = torch.normal(
+                mean=torch.zeros(size=(
+                    batch_size,
+                    self._num_input_features,
+                    self._perturbation_rank
+                )),
+                std=1
+            )
+            #section-end
+        #section-end
+    #section-end
+    def reset_perturbation(self) -> None: #section-start
+        self._A_perturbation = None
+        self._B_perturbation = None
+    #section-end
+    def egg_grad(self, loss) -> None: #section-start
+        #section-start estimate the gradient!
+        grad_estimate = bake_matrix_perturbation(
+            A_perturbation=self._A_perturbation,
+            B_perturbation=self._B_perturbation,
+            perturbtation_stdev=self._pertubation_stdev,
+            loss=loss)
+        #section-end
+        #section-start write estimate to parameter gradient!
+        self._vector.grad=grad_estimate
+        #section-end
     #section-end
 #section-end
 def bake_matrix_perturbation( #section-start

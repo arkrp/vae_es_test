@@ -78,8 +78,8 @@ def egg_grad_test_vector(): #section-start
     #section-end
     #section-start grad decent the model
     print("Begining grad optimization test. Loss should go down.")
-    optimizer = Adam(model.parameters(), lr=5e-4, weight_decay=1e-8)
-    batch_size = 10
+    optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
+    batch_size = 32
     desired_output_tensor = torch.arange(3)
     for i in range(20000):
         #print(list(model.parameters()))
