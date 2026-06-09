@@ -32,17 +32,40 @@ class EggVector(Module): #section-start
         ))
     #section-end
     def forward(self, *, batch_size): #section-start
+        #section-start orient parameter vector!
+        retval = self._vector.reshape((1,-1))
+        #section-end
+        #section-start add extant pertubations
         if self._perturbation is not None:
+            #section-start validate perturbation
             assert self._perturbation.shape[0] == batch_size
             assert self._perturbation.shape[1] == self._num_features
             assert len(self._perturbation.shape) == 2
-            return(self._vector + self._perturbation)
+            #section-end
+            #section-start add perturbation to vector
+            retval = (
+                retval +
+                self._perturbation)
+            #section-end
+        #section-end
+        #section-start just rescale otherwise
         else:
-            return(
-                self._vector.reshape((1,-1)) +
+            #section-start expand to batch size
+            retval = (
+                retval +
                 torch.zeros(size=(
                     batch_size,
                     self._num_features)))
+            #section-end
+        #section-end
+        #section-start validate output
+        assert retval.shape[0] == batch_size
+        assert retval.shape[1] == self._num_features
+        assert len(retval.shape) == 2
+        #section-end
+        #section-start return output!
+        return(retval)
+        #section-end
     #section-end
     def perturb(self, batch_size) -> None: #section-start
         #section-start perturb symmetrically for even batch size
