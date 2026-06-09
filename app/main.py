@@ -187,6 +187,7 @@ def egg_grad_test_affine(): #section-start
         num_input_features=input_size,
         num_output_features=output_size,
     )
+    model.train()
     #section-end
     #section-start generate true model
     true_model = EggAffine(
@@ -240,6 +241,7 @@ def egg_grad_test_affine(): #section-start
     #section-end
     #section-start unperturb the model
     model.apply(reset_perturbation())
+    model.eval()
     #section-end
     #section-start display results in readable way!
     print("Results. values should look vaguely similar.")

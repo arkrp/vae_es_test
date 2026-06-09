@@ -1,6 +1,6 @@
 #section-start import stuff
 from torch.nn.parameter import Parameter
-from torch.nn import functional as F, init, Module
+from torch.nn import functional as F, init, Module, BatchNorm1d
 import math
 import torch
 from torch import Tensor
@@ -267,9 +267,6 @@ class EggAffine(Module): #section-start
         super().__init__()
         self.num_input_features = num_input_features
         self.num_output_features = num_output_features
-        self.reset_parameters()
-    #section-end
-    def reset_parameters(self) -> None: #section-start
         self.bias_module = EggVector(
             num_features=self.num_output_features)
         self.linear_module = EggMatrix(
@@ -292,6 +289,41 @@ class EggAffine(Module): #section-start
         #section-end
     #section-end
 #section-end
+class EggBatchNorm1d(Module):
+    #section-start """
+    """
+    A batchnorm layer with scaling and bias terms that are egg trainable.
+    """
+    #section-end
+    num_features: int
+    scale_module: EggVector
+    bias_module: EggVector
+    _raw_batchnorm: BatchNorm1d
+    def __init__(self, num_features):
+        super().__init__()
+        self.num_features = num_features
+        self.scale_module = EggVector(
+            num_features=num_features)
+        self.bias_module = EggVector(
+            num_features=num_features)
+        self._raw_batchnorm = BatchNorm1d(
+            num_features,
+            affine=False,
+            bias=False)
+    def forward(self, x):
+        batch_size = x.shape[0]
+        assert x.shape[1] == num_features
+        assert len(x.shape) == 2
+        x = self._raw_batchnorm(x)
+        x = (
+            x *
+            self.scale_module(batch_size).reshape((
+                1,
+            #TODO finish this
+        )))
+
+
+
 def perturb(batch_size): #section-start
     #section-start """
     """
