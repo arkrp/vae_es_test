@@ -289,41 +289,60 @@ class EggAffine(Module): #section-start
         #section-end
     #section-end
 #section-end
-class EggBatchNorm1d(Module):
+class EggScaleShift(Module): #section-start
     #section-start """
     """
-    A batchnorm layer with scaling and bias terms that are egg trainable.
+    Egg module to scale and shift each dimension of vector independently, used to make batchnorm (This is more restricted than EggAffine)
     """
     #section-end
+    #section-start attributes!
     num_features: int
     scale_module: EggVector
     bias_module: EggVector
-    _raw_batchnorm: BatchNorm1d
-    def __init__(self, num_features):
+    #section-end
+    def __init__(self, *, num_features): #section-start
         super().__init__()
         self.num_features = num_features
         self.scale_module = EggVector(
             num_features=num_features)
         self.bias_module = EggVector(
             num_features=num_features)
-        self._raw_batchnorm = BatchNorm1d(
+    #section-end
+    def forward(self, x): #section-start
+        batch_size = x.shape[0]
+        assert x.shape[1] == self.num_features
+        assert len(x.shape) == 2
+        x = x * self.scale_module(batch_size=batch_size)
+        x = x + self.bias_module(batch_size=batch_size)
+        return(x)
+    #section-end
+#section-end
+class EggBatchNorm1d(Module): #section-start
+    #section-start """
+    """
+    A batchnorm layer with scaling and bias terms that are egg trainable.
+    """
+    #section-end
+    #section-start attributes
+    num_features: int
+    batchnorm_layer: BatchNorm1d
+    scale_shift_layer: EggScaleShift
+    #section-end
+    def __init__(self, num_features): #section-start
+        super().__init__()
+        self.batchnorm_layer = BatchNorm1d(
             num_features,
             affine=False,
             bias=False)
-    def forward(self, x):
-        batch_size = x.shape[0]
-        assert x.shape[1] == num_features
-        assert len(x.shape) == 2
-        x = self._raw_batchnorm(x)
-        x = (
-            x *
-            self.scale_module(batch_size).reshape((
-                1,
-            #TODO finish this
-        )))
-
-
-
+        self.scale_shift_layer = EggScaleShift(
+            num_features=num_features)
+    #section-end
+    def forward(self, x): #section-start
+        x = self.batchnorm_layer(x)
+        x = self.scale_shift_layer(x)
+        return(x)
+    #section-end
+#section-end
 def perturb(batch_size): #section-start
     #section-start """
     """
