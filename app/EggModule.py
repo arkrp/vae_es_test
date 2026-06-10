@@ -355,8 +355,7 @@ class EggBatchNorm1d(Module): #section-start
         super().__init__()
         self.batchnorm_layer = BatchNorm1d(
             num_features,
-            affine=False,
-            bias=False)
+            affine=False)
         self.scale_shift_layer = EggScaleShift(
             num_features=num_features)
     #section-end

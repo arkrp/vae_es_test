@@ -1,9 +1,10 @@
 #section-start import stuff
 from Datasets import MNIST
 import torchvision
+import torch
 from EggVAE import EggVAEGaussian
 #section-end
-def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, *, training_epoch_granularity=7, training_epoch_dots=5): #section-start
+def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, training_epoch_granularity=7, training_epoch_dots=5): #section-start
     #section-start compute numbers for batching
     data_size = len(training_dataloader.dataset)
     num_batches = ceil(data_size/batch_size)
@@ -59,7 +60,7 @@ def main(): #section-start
     )
     loss_function = VAE_loss_function
     training_dataloader, testing_dataloader = MNIST()
-    optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
     batch_size = 32
     #section-end
     #section-start train for an epoch

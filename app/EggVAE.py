@@ -8,7 +8,7 @@ MINIMUM_STDEV = 0.03
 #section-end
 #section-end
 #section-start models
-class EggSimpleNet(nn.Module): #section-start
+class EggSimpleNet(torch.nn.Module): #section-start
     #section-start """
     """
     An Egg-compatible simple neural network with two (primary) layers!
@@ -17,7 +17,7 @@ class EggSimpleNet(nn.Module): #section-start
     """
     #section-end
     #section-start attributes
-    __slots__ == ['input_shape', 'stack', 'output_shape']
+    __slots__ = ['input_shape', 'stack', 'output_shape']
     input_shape:    torch.Size
     stack:          torch.nn.Sequential
     output_shape:   torch.Size
@@ -27,6 +27,9 @@ class EggSimpleNet(nn.Module): #section-start
         input_shape,
         output_shape,
         network_width=128):
+        #section-end
+        #section-start init superclass
+        super().__init__()
         #section-end
         #section-start set shape attributes
         self.input_shape = input_shape
@@ -90,7 +93,7 @@ class EggSimpleNet(nn.Module): #section-start
         #section-end
     #section-end
 #section-end
-class EggVAEGaussian(nn.Module): #section-start
+class EggVAEGaussian(torch.nn.Module): #section-start
     #section-start """
     """
     The classical gaussian variational autoencoder but Egg compatible. The prior of this is the standard normal of whatever embedding shape is specified.
@@ -98,7 +101,7 @@ class EggVAEGaussian(nn.Module): #section-start
     #section-end
     #section-start attributes
     #section-start slots
-    __slots__ == [
+    __slots__ = [
         'data_shape',
         'embedding_features',
         'encoder',
@@ -121,6 +124,9 @@ class EggVAEGaussian(nn.Module): #section-start
         data_shape=torch.Size([1, 28, 28]),
         embedding_shape=torch.Size([10]),
         network_width=128):
+        #section-end
+        #section-start init superclass
+        super().__init__()
         #section-end
         #section-start body
         #section-start write shapes

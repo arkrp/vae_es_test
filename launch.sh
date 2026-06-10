@@ -6,6 +6,8 @@ podman run -it\
     --group-add keep-groups \
     --runtime crun \
     --name vae_es_test \
+    -v data_dir:/app/data_dir \
+    -e DATA_DIR="/app/data_dir" \
     vae_es_test $1
 #--cap-add=SYS_PTRACE \
 #--security-opt apparmor=unconfined \
