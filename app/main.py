@@ -87,7 +87,7 @@ class EggSimpleNet(nn.Module): #section-start
 class EggVAEGaussian(nn.Module):
     #section-start """
     """
-    The classical gaussian variational autoencoder but Egg compatible. Ur welcome.
+    The classical gaussian variational autoencoder but Egg compatible. The prior of this is the standard normal of whatever embedding shape is specified.
     """
     #section-end
     #section-start attributes
@@ -116,17 +116,28 @@ class EggVAEGaussian(nn.Module):
         embedding_shape=torch.Size([10]),
         network_width=128):
         #section-end
+        #section-start body
+        #section-start write shapes
         self.data_shape = data_shape
         self.embedding_shape = embedding_shape
-        encoder = EggSimpleNet(
+        #section-end
+        #section-start make networks
+        self.encoder = EggSimpleNet(
             input_shape=data_shape,
-            output_shape=embedding_shape)
-        decoder = EggSimpleNet(
+            output_shape=embedding_shape,
+            network_width=network_width)
+        self.decoder = EggSimpleNet(
             input_shape=embedding_shape,
-            output_shape=data_shape)
-        encoder_stdev_module = egg.EggVector(
+            output_shape=data_shape,
+            network_width=network_width)
+        #section-end
+        #section-start set stdev modules
+        self.encoder_stdev_module = egg.EggVector(
             num_features=1
         )
-        decoder_stdev_module = egg.EggVector(
+        self.decoder_stdev_module = egg.EggVector(
             num_features=1
         )
+        #section-end
+        #section-end
+    def forward(self, data):
