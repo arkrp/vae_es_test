@@ -172,7 +172,7 @@ def egg_grad_test_matrix(): #section-start
     #section-start display results in readable way!
     print("Results. Matricies should look vaguely similar in value.")
     print("true matrix: " + str(true_matrix))
-    print("trained_output: " + str(model._matrix))
+    print("trained_output: " + str(model.matrix))
     print("Test Complete")
     #section-end
     #section-end
