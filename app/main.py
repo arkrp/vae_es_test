@@ -1,7 +1,13 @@
+#section-start setup
 #section-start import stuff
 import torch
 import EggModule as egg
 #section-end
+#section-start write constants
+MINIMUM_STDEV = 0.03
+#section-end
+#section-end
+#section-start models
 class EggSimpleNet(nn.Module): #section-start
     #section-start """
     """
@@ -84,7 +90,7 @@ class EggSimpleNet(nn.Module): #section-start
         #section-end
     #section-end
 #section-end
-class EggVAEGaussian(nn.Module):
+class EggVAEGaussian(nn.Module): #section-start
     #section-start """
     """
     The classical gaussian variational autoencoder but Egg compatible. The prior of this is the standard normal of whatever embedding shape is specified.
@@ -140,4 +146,142 @@ class EggVAEGaussian(nn.Module):
         )
         #section-end
         #section-end
-    def forward(self, data):
+    #section-end
+    def forward(self, data): #section-start
+        #section-start validate input
+        batch_size = data.shape[0]
+        assert data.shape[1:] == self.data_shape
+        #section-end
+        #section-start run the models
+        #section-start run the encoder!
+        embedding_mean = self.encoder(data)
+        embedding_stdev = torch.abs(self.encoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
+        embedding_stdev_dimensionized = torch.unflatten(
+            input=embedding_stdev,
+            dim=1,
+            sizes=torch.Size([1]*len(self.embedding_shape))
+        )
+        embedding_sample = torch.normal(
+            mean = embedding_mean,
+            std = embedding_stdev_dimensionized
+        )
+        #section-end
+        #section-start declare the prior
+        self.prior_mean = torch.zeros(
+            size=torch.Size([batch_size])+self.embedding_shape
+        )
+        self.prior_stdev = prior_mean + 1
+        embedding_sample_encoder_log_likelyhood = (
+            diagonal_gaussian_unnormalized_log_likelyhood(
+                mean=embedding_mean,
+                stdev=embedding_stdev,
+                draw=embedding_sample
+            )
+        )
+        #section-end
+        #section-start run the decoder!
+        decoding_mean = self.decoder(embedding_sample)
+        decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
+        decoding_stdev_dimensionized = torch.unflatten(
+            input=decoding_stdev,
+            dim=1,
+            sizes=torch.Size([1]*len(self.decoding_shape))
+        )
+        #section-end
+        #section-end
+        #section-start do come calculations
+        #section-start compute the likelyhoods
+        embedding_sample_encoder_log_likelyhood = ( #section-start
+            diagonal_gaussian_unnormalized_log_likelyhood(
+                mean=embedding_mean,
+                stdev=embedding_stdev,
+                draw=embedding_sample
+            )
+        )
+        #section-end
+        embedding_sample_prior_log_likelyhood = ( #section-start
+            diagonal_gaussian_unnormalized_log_likelyhood(
+                mean=self.prior_mean,
+                stdev=self.prior_stdev,
+                draw=embedding_sample
+            )
+        )
+        #section-end
+        data_decoding_log_likelyhood = ( #section-start
+            diagonal_gaussian_unnormalized_log_likelyhood(
+                mean=decoding_mean,
+                stdev=decoding_stdev,
+                draw=data
+            )
+        )
+        #section-end
+        #section-end
+        #section-start calculate the elbo
+        evidence_lower_bound = (
+            data_decoding_log_likelyhood +
+            embedding_sample_prior_log_likelyhood -
+            embedding_sample_encoder_log_likelyhood
+        )
+        #section-end
+        #section-end
+        #section-start validate output
+        assert evidence_lower_bound.shape[0] == batch_size
+        assert len(evidence_lower_bound.shape) == 1
+        #section-end
+        #section-start return the output (elbo)
+        return(evidence_lower_bound)
+        #section-end
+    #section-end
+#section-end
+#section-end
+#section-start helper functions
+def diagonal_guassian_unnormalized_log_likelyhood(*, #section-start
+    #section-start args
+    mean,
+    stdev,
+    draw):
+    #section-end
+    #section-start """
+    """
+    I had to modify this one to return a vector of losses instead of a single unified loss. This makes it eggroll compatible.
+    
+    This just gets the log likelyhood of drawing something from a multivaritate gaussian with diagonal covariance matrix
+    """
+    #section-end
+    #section-start validate input
+    batch_size = mean.shape[0]
+    assert mean.shape == stdev.shape
+    assert mean.shape == draw.shape
+    assert torch.all(stdev > 0)
+    #section-end
+    #section-start flatten the inputs
+    mean = torch.flatten(
+        input=mean,
+        start_dim=1)
+    stdev = torch.flatten(
+        input=stdev,
+        start_dim=1)
+    draw = torch.flatten(
+        input=draw,
+        start_dim=1)
+    #section-end
+    #section-start do the calculation!
+    #section-start determine the probability when normalized
+    identity_prob = (-0.5*(((mean-draw)/stdev)**2)).sum()
+    #section-end
+    #section-start determine the determinant
+    determinant_regularizer = torch.log(stdev).sum()
+    #section-end
+    #section-start combine these together
+    retval = identity_prob - determinant_regularizer
+    #section-end
+    #section-end
+    #section-start validate output
+    assert retval.shape[0] == batch_size
+    assert len(retval.shape) == 1
+    #section-end
+    #section-start return output!
+    return retval
+    #section-end
+#section-end
+#section-end
