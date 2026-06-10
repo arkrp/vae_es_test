@@ -3,8 +3,7 @@ from Datasets import MNIST
 import torchvision
 from EggVAE import EggVAEGaussian
 #section-end
-def train_epoch(training_model, loss_function, training_dataloader, optimizer, batch_size, *, training_epoch_granularity=7, training_epoch_dots=5): #section-start
-    #TODO adapt for egg
+def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, *, training_epoch_granularity=7, training_epoch_dots=5): #section-start
     #section-start compute numbers for batching
     data_size = len(training_dataloader.dataset)
     num_batches = ceil(data_size/batch_size)
@@ -12,15 +11,15 @@ def train_epoch(training_model, loss_function, training_dataloader, optimizer, b
     batch_dot_point = (batch_report_point//training_epoch_dots)
     #section-end
     #section-start set model to train mode
-    training_model.train()
+    model.train()
     #section-end
     #section-start loop to train!
     for batch_number, (X,Y) in enumerate(training_dataloader):
         #section-start perturb the model
-        training_model.apply(perturb(batch_size))
+        model.apply(perturb(batch_size))
         #section-end
         #section-start compute the loss
-        loss = loss_function(X, Y, training_model(X))
+        loss = loss_function(X, Y, model(X))
         #section-end
         #section-start make sure we don't get NaN losses
         if loss.isnan().any():
@@ -45,14 +44,34 @@ def train_epoch(training_model, loss_function, training_dataloader, optimizer, b
         #section-end
     #section-end
     #section-start place model in eval mode
-    training_model.apply(reset_perturbation())
-    training_model.eval()
+    model.apply(reset_perturbation())
+    model.eval()
     #section-end
 #section-end
 def VAE_loss_function(X, Y, ELBO): #section-start
     return(-ELBO)
 #section-end
-def main():
-    pass #TODO
+def main(): #section-start
+    #section-start set training parameters
+    model = EggVAEGaussian(
+        data_shape=torch.Size([1, 28, 28]),
+        embedding_shape=torch.Size([10]),
+    )
+    loss_function = VAE_loss_function
+    training_dataloader, testing_dataloader = MNIST()
+    optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
+    batch_size = 32
+    #section-end
+    #section-start train for an epoch
+    train_epoch(
+        model=model,
+        loss_function=loss_function,
+        training_dataloader=training_dataloader,
+        optimizer=optimizer,
+        batch_size=batch_size)
+    #section-end
+#section-end
+#section-start call main
 if __name__ == "__main__":
     main()
+#section-end
