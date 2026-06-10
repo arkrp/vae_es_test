@@ -34,10 +34,8 @@
 print("Hello World!")
 import math
 import torch
-import torchvision
 from torch import Tensor
 from torch.optim import Adam
-from Datasets import MNIST
 from EggModule import EggVector, EggMatrix, EggAffine, EggScaleShift, perturb, egg_grad, reset_perturbation
 print("preload complete")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
