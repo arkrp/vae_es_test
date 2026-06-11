@@ -10,6 +10,7 @@ from EggVAE import EggVAEGaussian, EggSimpleNet
 #section-end
 # An awful note to self. Oddly image performance appears to continue to do better even after the loss stops going down. In fact when the loss hits its minimum it looks like garbage. This is kind of awful.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#torch.set_default_dtype(torch.float16)
 torch.set_default_device(device)
 def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, training_epoch_granularity=7, training_epoch_dots=5): #section-start
     with torch.no_grad():
@@ -200,7 +201,7 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
 #section-end
 def generation_figure(decoder): #section-start
     def random_decoder_sample():
-      return decoder(torch.zeros(1).unsqueeze(0))[0]
+      return decoder(torch.zeros(2).unsqueeze(0))[0]
     rows, columns, scaleup = 2, 8, 2
     figure = plt.figure(figsize=(columns* scaleup, rows*scaleup), layout='constrained')
     figure.suptitle('Random Draws p(~N(0,I))')
@@ -217,16 +218,16 @@ def generation_figure(decoder): #section-start
 #section-end
 def main(): #section-start
     #section-start set training parameters
-    batch_size = 96
+    batch_size = 128
     model = EggVAEGaussian(
         data_shape=torch.Size([1, 28, 28]),
-        embedding_shape=torch.Size([1]),
+        embedding_shape=torch.Size([2]),
         network_width=4)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1)
     loss_function = reverse_elbo_loss
     training_dataset, _ = MNIST()
-    epochs=40
+    epochs=160
     #section-end
     #section-start run the train loop
     egg_train_loop(
