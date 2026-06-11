@@ -40,29 +40,29 @@ class EggSimpleNet(torch.nn.Module): #section-start
             #egg.EggBatchNorm1d(
             #    num_features=input_shape.numel()
             #),
+            #egg.EggAffine(
+            #    num_input_features=input_shape.numel(),
+            #    num_output_features=network_width
+            #),
+            #egg.EggBatchNorm1d(
+            #    num_features=network_width
+            #),
+            #torch.nn.LeakyReLU(),
+            #egg.EggAffine(
+            #    num_input_features=network_width,
+            #    num_output_features=network_width
+            #),
+            #torch.nn.LeakyReLU(),
+            #egg.EggAffine(
+            #    num_input_features=network_width,
+            #    num_output_features=network_width
+            #),
+            #egg.EggBatchNorm1d(
+            #    num_features=network_width
+            #),
+            #torch.nn.LeakyReLU(),
             egg.EggAffine(
                 num_input_features=input_shape.numel(),
-                num_output_features=network_width
-            ),
-            #egg.EggBatchNorm1d(
-            #    num_features=network_width
-            #),
-            #torch.nn.LeakyReLU(),
-            #egg.EggAffine(
-            #    num_input_features=network_width,
-            #    num_output_features=network_width
-            #),
-            #torch.nn.LeakyReLU(),
-            #egg.EggAffine(
-            #    num_input_features=network_width,
-            #    num_output_features=network_width
-            #),
-            #egg.EggBatchNorm1d(
-            #    num_features=network_width
-            #),
-            torch.nn.LeakyReLU(),
-            egg.EggAffine(
-                num_input_features=network_width,
                 num_output_features=output_shape.numel()
             )
         )
@@ -167,7 +167,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-start run the encoder!
         embedding_mean = self.encoder(data)
         embedding_stdev = torch.abs(self.encoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
-        embedding_stdev = torch.ones_like(embedding_stdev) #TODO remove
+        embedding_stdev = torch.ones_like(embedding_stdev)*0.1 #TODO remove
         #section-start unfold stdev to match dimension number
         embedding_stdev_unfolded = torch.unflatten(
             input=embedding_stdev,
@@ -184,13 +184,13 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         prior_mean = torch.zeros(
             size=torch.Size([batch_size])+self.embedding_shape
         )
-        prior_stdev = prior_mean + 1
+        prior_stdev = prior_mean + 0.00001 #TODO change this to something reasonable
         #section-end
         #section-start run the decoder!
         decoding_mean = self.decoder(embedding_sample)
-        #decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
+        decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
         decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
-        decoding_stdev = torch.ones_like(decoding_stdev) #TODO remove
+        decoding_stdev = torch.ones_like(decoding_stdev)*0.1 #TODO remove
         #section-start unfold stdev to match dimension number
         decoding_stdev_unfolded = torch.unflatten(
             input=decoding_stdev,
@@ -229,7 +229,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-end
         #section-start calculate the elbo
         evidence_lower_bound = (
-            data_decoding_log_likelyhood+
+            data_decoding_log_likelyhood +
             embedding_sample_prior_log_likelyhood -
             embedding_sample_encoder_log_likelyhood
         )
@@ -307,3 +307,4 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
 #Switching over to training an eggsimplenet to see if I can even get things to mean match properly.
 #There seems to be something jamming the system. Even with incredibly basic 
 #Ok I have basically confirmed that there is some fundemental issue speficieally with EggVAEGaussian forward, since everything else logigcally works fine.
+#Fixing the encoding to zero works fine, but tryign to collapse the model with a small prior just doesn't more research is needed

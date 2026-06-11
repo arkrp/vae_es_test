@@ -227,7 +227,7 @@ def main(): #section-start
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1)
     loss_function = reverse_elbo_loss
     training_dataset, _ = MNIST()
-    epochs=160
+    epochs=10
     #section-end
     #section-start run the train loop
     egg_train_loop(
