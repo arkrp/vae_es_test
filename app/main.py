@@ -33,8 +33,7 @@ def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, bat
             model.apply(perturb(actual_batch_size))
             #section-end
             #section-start compute the loss
-            #model_output = model(X)#TODO restore
-            model_output = model(torch.zeros(size=[actual_batch_size,1]))#TODO delete
+            model_output = model(X)#TODO restore
             loss = loss_function(X, Y, model_output)
             #section-end
             #section-start make sure we don't get NaN losses
@@ -144,6 +143,9 @@ def l2_loss_function_dynamic(X, Y, Pred): #section-start
         draw=X,
     ))
 #section-end
+def reverse_elbo_loss(X, Y, ELBO): #section-start
+    return(-ELBO)
+#section-end
 def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
     #section-start args
     mean,
@@ -198,8 +200,7 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
 #section-end
 def generation_figure(decoder): #section-start
     def random_decoder_sample():
-      return decoder(torch.zeros(1).unsqueeze(0))[0] #TODO remove
-      return decoder(torch.randn(10).unsqueeze(0))[0]
+      return decoder(torch.randn(4).unsqueeze(0))[0]
     rows, columns, scaleup = 2, 8, 2
     figure = plt.figure(figsize=(columns* scaleup, rows*scaleup), layout='constrained')
     figure.suptitle('Random Draws p(~N(0,I))')
@@ -217,19 +218,13 @@ def generation_figure(decoder): #section-start
 def main(): #section-start
     #section-start set training parameters
     batch_size = 96
-    #model = EggVAEGaussian(
-    #    data_shape=torch.Size([1, 28, 28]),
-    #    embedding_shape=torch.Size([10]),
-    #    network_width=4
-    #)
-    model = EggSimpleNet(
-        input_shape=torch.Size([1]),
-        output_shape=torch.Size([1,28,28]),
+    model = EggVAEGaussian(
+        data_shape=torch.Size([1, 28, 28]),
+        embedding_shape=torch.Size([4]),
         network_width=16)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-1)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-10, weight_decay=1e-2)
-    loss_function = l2_loss_function_dynamic
+    loss_function = reverse_elbo_loss
     training_dataset, _ = MNIST()
     epochs=10
     #section-end
@@ -244,7 +239,7 @@ def main(): #section-start
     #section-end
     #section-start call the figure generator
     print("making generation figure")
-    generation_figure(model).savefig("/app/figures/genfig.png")
+    generation_figure(model.decoder).savefig("/app/figures/genfig.png")
     print("generation figure generated")
     #section-end
 #section-end

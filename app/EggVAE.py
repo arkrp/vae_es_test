@@ -189,6 +189,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         decoding_mean = self.decoder(embedding_sample)
         decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
         decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
+        decoding_stdev = torch.ones_like(decoding_stdev) #TODO remove
         #section-start unfold stdev to match dimension number
         decoding_stdev_unfolded = torch.unflatten(
             input=decoding_stdev,
@@ -304,3 +305,4 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
 #I am going to make an incredibly simple objective (sum output) and see if it can get it right.
 #Switching over to training an eggsimplenet to see if I can even get things to mean match properly.
 #There seems to be something jamming the system. Even with incredibly basic 
+#Ok I have basically confirmed that there is some fundemental issue speficieally with EggVAEGaussian forward, since everything else logigcally works fine.
