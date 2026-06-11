@@ -47,15 +47,15 @@ class EggSimpleNet(torch.nn.Module): #section-start
             #egg.EggBatchNorm1d(
             #    num_features=network_width
             #),
-            #torch.nn.ReLU(),
-            #egg.EggAffine(
-            #    num_input_features=network_width,
-            #    num_output_features=network_width
-            #),
+            torch.nn.LeakyReLU(),
+            egg.EggAffine(
+                num_input_features=network_width,
+                num_output_features=network_width
+            ),
             #egg.EggBatchNorm1d(
             #    num_features=network_width
             #),
-            #torch.nn.ReLU(),
+            torch.nn.LeakyReLU(),
             egg.EggAffine(
                 num_input_features=network_width,
                 num_output_features=output_shape.numel()

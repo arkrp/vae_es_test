@@ -147,7 +147,7 @@ def generation_figure(decoder): #section-start
 #section-end
 def main(): #section-start
     #section-start set training parameters
-    batch_size = 64
+    batch_size = 128
     #model = EggVAEGaussian(
     #    data_shape=torch.Size([1, 28, 28]),
     #    embedding_shape=torch.Size([10]),
@@ -158,11 +158,11 @@ def main(): #section-start
         output_shape=torch.Size([1,28,28]),
         network_width=16)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=8e-2, weight_decay=1e-4)
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=1e-8)
     loss_function = l1_loss_function
     training_dataset, _ = MNIST()
-    epochs=5
+    epochs=3
     #section-end
     #section-start run the train loop
     egg_train_loop(
