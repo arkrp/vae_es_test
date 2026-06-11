@@ -6,7 +6,7 @@ import math
 import pandas as pd
 import matplotlib.pyplot as plt
 from EggModule import perturb, egg_grad, reset_perturbation
-from EggVAE import EggVAEGaussian
+from EggVAE import EggVAEGaussian, EggSimpleNet
 #section-end
 def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, training_epoch_granularity=7, training_epoch_dots=5): #section-start
     with torch.no_grad():
@@ -26,7 +26,8 @@ def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, bat
             model.apply(perturb(actual_batch_size))
             #section-end
             #section-start compute the loss
-            model_output = model(X)
+            #model_output = model(X)#TODO restore
+            model_output = model(torch.zeros(size=[actual_batch_size,1]))#TODO delete
             loss = loss_function(X, Y, model_output)
             #section-end
             #section-start make sure we don't get NaN losses
@@ -113,8 +114,15 @@ def VAE_loss_function(X, Y, ELBO): #section-start
     assert len(ELBO.shape) == 1
     return(-ELBO)
 #section-end
+some_data, _ = MNIST()
+specific_image = some_data[0][0].unsqueeze(0)
+def l1_loss_function(X, Y, Pred): #section-start
+    assert specific_image.shape[1:]==Pred.shape[1:]
+    return(torch.abs(specific_image-Pred).flatten(start_dim=1).sum(dim=1))
+#section-end
 def generation_figure(decoder): #section-start
     def random_decoder_sample():
+      return decoder(torch.zeros(1).unsqueeze(0))[0] #TODO remove
       return decoder(torch.randn(10).unsqueeze(0))[0]
     rows, columns, scaleup = 2, 8, 2
     figure = plt.figure(figsize=(columns* scaleup, rows*scaleup), layout='constrained')
@@ -125,7 +133,9 @@ def generation_figure(decoder): #section-start
     axs = figure.subplots(nrows=rows, ncols=columns)
     for ax in axs.ravel():
       image = random_decoder_sample().detach()
-      ax.imshow(image.squeeze(), cmap='grey')
+      print(f"{image.max()=}")
+      print(f"{image.min()=}")
+      ax.imshow(image.squeeze(), cmap='grey', vmin=0, vmax=1)
       ax.set_title('')
       ax.set_axis_off()
     return figure
@@ -133,14 +143,20 @@ def generation_figure(decoder): #section-start
 def main(): #section-start
     #section-start set training parameters
     batch_size = 1024
-    model = EggVAEGaussian(
-        data_shape=torch.Size([1, 28, 28]),
-        embedding_shape=torch.Size([10]),
-    )
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-8)
-    loss_function = VAE_loss_function
+    #model = EggVAEGaussian(
+    #    data_shape=torch.Size([1, 28, 28]),
+    #    embedding_shape=torch.Size([10]),
+    #    network_width=4
+    #)
+    model = EggSimpleNet(
+        input_shape=torch.Size([1]),
+        output_shape=torch.Size([1,28,28]),
+        network_width=16)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-4)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=1e-8)
+    loss_function = l1_loss_function
     training_dataset, _ = MNIST()
-    epochs=50
+    epochs=30
     #section-end
     #section-start run the train loop
     egg_train_loop(
@@ -151,9 +167,11 @@ def main(): #section-start
         batch_size=batch_size,
         epochs=epochs)
     #section-end
+    #section-start call the figure generator
     print("making generation figure")
-    generation_figure(model.decoder).savefig("/app/figures/genfig.png")
+    generation_figure(model).savefig("/app/figures/genfig.png")
     print("generation figure generated")
+    #section-end
 #section-end
 #section-start call main
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import math
 import torch
 from torch import Tensor
 #section-end
+DEFAULT_PERTURBATION_STDEV = 1
 #section-start define modules
 class EggVector(Module): #section-start
     #section-start """
@@ -18,7 +19,7 @@ class EggVector(Module): #section-start
     _perturbation: Tensor
     _perturbation_stdev: float
     #section-end
-    def __init__(self, *, num_features, perturbation_stdev=0.1): #section-start
+    def __init__(self, *, num_features, perturbation_stdev=DEFAULT_PERTURBATION_STDEV): #section-start
         super().__init__()
         self.num_features = num_features
         self._perturbation = None
@@ -114,7 +115,7 @@ class EggMatrix(Module): #section-start
     _perturbation_rank: int
     _perturbation_stdev: float
     #section-end
-    def __init__(self, *, num_input_features, num_output_features, perturbation_rank=None, perturbation_stdev=0.1): #section-start
+    def __init__(self, *, num_input_features, num_output_features, perturbation_rank=None, perturbation_stdev=DEFAULT_PERTURBATION_STDEV): #section-start
         super().__init__()
         self.num_input_features = num_input_features
         self.num_output_features = num_output_features

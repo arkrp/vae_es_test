@@ -40,24 +40,24 @@ class EggSimpleNet(torch.nn.Module): #section-start
             #egg.EggBatchNorm1d(
             #    num_features=input_shape.numel()
             #),
+            #egg.EggAffine(
+            #    num_input_features=input_shape.numel(),
+            #    num_output_features=network_width
+            #),
+            #egg.EggBatchNorm1d(
+            #    num_features=network_width
+            #),
+            #torch.nn.ReLU(),
+            #egg.EggAffine(
+            #    num_input_features=network_width,
+            #    num_output_features=network_width
+            #),
+            #egg.EggBatchNorm1d(
+            #    num_features=network_width
+            #),
+            #torch.nn.ReLU(),
             egg.EggAffine(
                 num_input_features=input_shape.numel(),
-                num_output_features=network_width
-            ),
-            #egg.EggBatchNorm1d(
-            #    num_features=network_width
-            #),
-            torch.nn.ReLU(),
-            egg.EggAffine(
-                num_input_features=network_width,
-                num_output_features=network_width
-            ),
-            #egg.EggBatchNorm1d(
-            #    num_features=network_width
-            #),
-            torch.nn.ReLU(),
-            egg.EggAffine(
-                num_input_features=network_width,
                 num_output_features=output_shape.numel()
             )
         )
@@ -103,7 +103,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
     #section-start slots
     __slots__ = [
         'data_shape',
-        'embedding_features',
+        'embedding_shape',
         'encoder',
         'decoder',
         'encoder_stdev_module',
@@ -182,6 +182,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-end
         #section-start run the decoder!
         decoding_mean = self.decoder(embedding_sample)
+        decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
         decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
         #section-start unfold stdev to match dimension number
         decoding_stdev_unfolded = torch.unflatten(
@@ -221,10 +222,14 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-end
         #section-start calculate the elbo
         evidence_lower_bound = (
-            data_decoding_log_likelyhood +
+            data_decoding_log_likelyhood+
             embedding_sample_prior_log_likelyhood -
             embedding_sample_encoder_log_likelyhood
         )
+        evidence_lower_bound = -torch.sum(
+            (decoding_mean-1)**2,
+            dim=(1,2,3)
+        )#TODO remove
         #section-end
         #section-end
         #section-start validate output
@@ -291,3 +296,9 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
     #section-end
 #section-end
 #section-end
+#TODO remove comments below
+#OK so far I have cut off the prior and encoder. I would expect it to optimize to the mean now, but its not.
+#ALSO I massively simplified the eggnet.
+#I am going to make an incredibly simple objective (sum output) and see if it can get it right.
+#Switching over to training an eggsimplenet to see if I can even get things to mean match properly.
+#There seems to be something jamming the system. Even with incredibly basic 
