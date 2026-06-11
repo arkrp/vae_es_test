@@ -154,7 +154,7 @@ def main(): #section-start
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=1e-8)
     loss_function = l1_loss_function
     training_dataset, _ = MNIST()
-    epochs=10
+    epochs=40
     #section-end
     #section-start run the train loop
     egg_train_loop(
