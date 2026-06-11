@@ -133,8 +133,6 @@ def generation_figure(decoder): #section-start
     axs = figure.subplots(nrows=rows, ncols=columns)
     for ax in axs.ravel():
       image = random_decoder_sample().detach()
-      print(f"{image.max()=}")
-      print(f"{image.min()=}")
       ax.imshow(image.squeeze(), cmap='grey', vmin=0, vmax=1)
       ax.set_title('')
       ax.set_axis_off()
@@ -156,7 +154,7 @@ def main(): #section-start
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=1e-8)
     loss_function = l1_loss_function
     training_dataset, _ = MNIST()
-    epochs=30
+    epochs=10
     #section-end
     #section-start run the train loop
     egg_train_loop(

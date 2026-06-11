@@ -5,7 +5,7 @@ import math
 import torch
 from torch import Tensor
 #section-end
-DEFAULT_PERTURBATION_STDEV = 1
+DEFAULT_PERTURBATION_STDEV = 1e-8
 #section-start define modules
 class EggVector(Module): #section-start
     #section-start """
