@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 from EggModule import perturb, egg_grad, reset_perturbation
 from EggVAE import EggVAEGaussian, EggSimpleNet
 #section-end
+# An awful note to self. Oddly image performance appears to continue to do better even after the loss stops going down. In fact when the loss hits its minimum it looks like garbage. This is kind of awful.
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.set_default_device(device)
 def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, training_epoch_granularity=7, training_epoch_dots=5): #section-start
     with torch.no_grad():
         #section-start compute numbers for batching
@@ -82,7 +85,11 @@ def egg_train_loop(*, #section-start
     training_epoch_dots=5,
     testing_epoch_dots=10):
     print('Training Starting!')
-    training_dataloader = torch.utils.data.DataLoader(training_dataset, batch_size=batch_size, shuffle=True)
+    training_dataloader = torch.utils.data.DataLoader(
+        training_dataset,
+        batch_size=batch_size,
+        generator=torch.Generator(device=device),
+        shuffle=True)
     if testing_dataset:
         testing_dataloader = torch.utils.data.DataLoader(testing_dataset, batch_size=batch_size, shuffle=True)
     training_loss_record = []
@@ -115,7 +122,7 @@ def VAE_loss_function(X, Y, ELBO): #section-start
     return(-ELBO)
 #section-end
 some_data, _ = MNIST()
-specific_image = some_data[0][0].unsqueeze(0)
+specific_image = some_data[0][0].unsqueeze(0).to(device)
 def l1_loss_function(X, Y, Pred): #section-start
     assert specific_image.shape[1:]==Pred.shape[1:]
     return(torch.abs(specific_image-Pred).flatten(start_dim=1).sum(dim=1))
@@ -132,15 +139,15 @@ def generation_figure(decoder): #section-start
     figure.set_linewidth(1)
     axs = figure.subplots(nrows=rows, ncols=columns)
     for ax in axs.ravel():
-      image = random_decoder_sample().detach()
-      ax.imshow(image.squeeze(), cmap='grey', vmin=0, vmax=1)
-      ax.set_title('')
-      ax.set_axis_off()
+        image = random_decoder_sample().detach().cpu()
+        ax.imshow(image.squeeze(), cmap='grey', vmin=0, vmax=1)
+        ax.set_title('')
+        ax.set_axis_off()
     return figure
 #section-end
 def main(): #section-start
     #section-start set training parameters
-    batch_size = 1024
+    batch_size = 64
     #model = EggVAEGaussian(
     #    data_shape=torch.Size([1, 28, 28]),
     #    embedding_shape=torch.Size([10]),
@@ -150,11 +157,12 @@ def main(): #section-start
         input_shape=torch.Size([1]),
         output_shape=torch.Size([1,28,28]),
         network_width=16)
+    model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-4)
     #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=1e-8)
     loss_function = l1_loss_function
     training_dataset, _ = MNIST()
-    epochs=40
+    epochs=5
     #section-end
     #section-start run the train loop
     egg_train_loop(
