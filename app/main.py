@@ -2,12 +2,15 @@
 from Datasets import MNIST
 import torchvision
 import torch
+import math
+import pandas as pd
+from EggModule import perturb, egg_grad, reset_perturbation
 from EggVAE import EggVAEGaussian
 #section-end
 def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_size, training_epoch_granularity=7, training_epoch_dots=5): #section-start
     #section-start compute numbers for batching
     data_size = len(training_dataloader.dataset)
-    num_batches = ceil(data_size/batch_size)
+    num_batches = math.ceil(data_size/batch_size)
     batch_report_point = num_batches//training_epoch_granularity
     batch_dot_point = (batch_report_point//training_epoch_dots)
     #section-end
@@ -17,10 +20,12 @@ def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_s
     #section-start loop to train!
     for batch_number, (X,Y) in enumerate(training_dataloader):
         #section-start perturb the model
-        model.apply(perturb(batch_size))
+        actual_batch_size = X.shape[0]
+        model.apply(perturb(actual_batch_size))
         #section-end
         #section-start compute the loss
-        loss = loss_function(X, Y, model(X))
+        model_output = model(X)
+        loss = loss_function(X, Y, model_output)
         #section-end
         #section-start make sure we don't get NaN losses
         if loss.isnan().any():
@@ -39,7 +44,7 @@ def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_s
         if batch_dot_point - dot_point == 1:
             print('.', end='', flush=True)
         if batch_report_point - report_point == 1:
-            loss_score = loss.item()
+            loss_score = loss.mean().item()
             current = batch_number * batch_size + len(X)
             print(f' Average Loss: {loss_score}, Progress: {current}/{data_size}')
         #section-end
@@ -49,25 +54,81 @@ def train_epoch(*, model, loss_function, training_dataloader, optimizer, batch_s
     model.eval()
     #section-end
 #section-end
+def test_epoch(testing_model, loss_function, testing_dataloader, batch_size, *, sample_testing_cutoff=4000): #section-start
+    testing_model.eval()
+    total_loss = torch.zeros(1)
+    samples_tested = 0
+    for batch_number, (X,_) in enumerate(testing_dataloader):
+        loss = loss_function(X, testing_model(X))
+        total_loss += loss.detach()
+        samples_tested += batch_size
+        if samples_tested >= sample_testing_cutoff:
+            break
+    average_loss = total_loss/samples_tested
+    return average_loss.item()
+#section-end
+def train_loop(*, #section-start
+    model,
+    loss_function,
+    training_dataset,
+    optimizer,
+    batch_size,
+    epochs=3,
+    testing_dataset=None,
+    training_epoch_granularity=7,
+    training_epoch_dots=5,
+    testing_epoch_dots=10):
+    print('Training Starting!')
+    training_dataloader = torch.utils.data.DataLoader(training_dataset, batch_size=batch_size, shuffle=True)
+    if testing_dataset:
+        testing_dataloader = torch.utils.data.DataLoader(testing_dataset, batch_size=batch_size, shuffle=True)
+    training_loss_record = []
+    testing_loss_record = []
+    for epoch in range(1, epochs+1):
+        print(f'Epoch {epoch} of {epochs}')
+        train_epoch(
+            model=model,
+            loss_function=loss_function,
+            training_dataloader=training_dataloader,
+            optimizer=optimizer,
+            batch_size=batch_size,
+            training_epoch_granularity=training_epoch_granularity,
+            training_epoch_dots=training_epoch_dots)
+        #TODO re-add #average_training_loss = test_epoch(model, loss_function, training_dataloader, batch_size)
+        #TODO re-add #training_loss_record.append(average_training_loss)
+        #print(f'Average Training Set Loss: {average_training_loss}')
+#        if testing_dataset:
+#            average_testing_loss = test_epoch(model, loss_function, testing_dataloader, batch_size)
+#            testing_loss_record.append(average_testing_loss)
+#            print(f'Average Test Set Loss: {average_testing_loss}')
+    print('Training Complete!')
+#  if testing_dataloader is not None:
+#      return pd.DataFrame({'epoch':range(1,epochs+1), 'training loss':training_loss_record, 'testing loss':testing_loss_record})
+#  else:
+#      return pd.DataFrame({'epoch':range(1,epochs+1), 'training loss':training_loss_record})
+#section-end
 def VAE_loss_function(X, Y, ELBO): #section-start
     return(-ELBO)
 #section-end
 def main(): #section-start
     #section-start set training parameters
+    batch_size = 256
     model = EggVAEGaussian(
         data_shape=torch.Size([1, 28, 28]),
         embedding_shape=torch.Size([10]),
     )
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-8)
     loss_function = VAE_loss_function
-    training_dataloader, testing_dataloader = MNIST()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
-    batch_size = 32
+    training_dataset, _ = MNIST()
+    #training_dataloader = torch.utils.data.DataLoader(
+    #    training_dataset,
+    #    batch_size=batch_size)
     #section-end
     #section-start train for an epoch
-    train_epoch(
+    train_loop(
         model=model,
         loss_function=loss_function,
-        training_dataloader=training_dataloader,
+        training_dataset=training_dataset,
         optimizer=optimizer,
         batch_size=batch_size)
     #section-end

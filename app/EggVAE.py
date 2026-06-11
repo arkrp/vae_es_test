@@ -162,37 +162,34 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-start run the encoder!
         embedding_mean = self.encoder(data)
         embedding_stdev = torch.abs(self.encoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
-        embedding_stdev_dimensionized = torch.unflatten(
+        #section-start unfold stdev to match dimension number
+        embedding_stdev_unfolded = torch.unflatten(
             input=embedding_stdev,
             dim=1,
             sizes=torch.Size([1]*len(self.embedding_shape))
         )
+        #section-end
         embedding_sample = torch.normal(
             mean = embedding_mean,
-            std = embedding_stdev_dimensionized
+            std = embedding_stdev_unfolded
         )
         #section-end
         #section-start declare the prior
-        self.prior_mean = torch.zeros(
+        prior_mean = torch.zeros(
             size=torch.Size([batch_size])+self.embedding_shape
         )
-        self.prior_stdev = prior_mean + 1
-        embedding_sample_encoder_log_likelyhood = (
-            diagonal_gaussian_unnormalized_log_likelyhood(
-                mean=embedding_mean,
-                stdev=embedding_stdev,
-                draw=embedding_sample
-            )
-        )
+        prior_stdev = prior_mean + 1
         #section-end
         #section-start run the decoder!
         decoding_mean = self.decoder(embedding_sample)
         decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
-        decoding_stdev_dimensionized = torch.unflatten(
+        #section-start unfold stdev to match dimension number
+        decoding_stdev_unfolded = torch.unflatten(
             input=decoding_stdev,
             dim=1,
-            sizes=torch.Size([1]*len(self.decoding_shape))
+            sizes=torch.Size([1]*len(self.data_shape))
         )
+        #section-end
         #section-end
         #section-end
         #section-start do come calculations
@@ -200,15 +197,15 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         embedding_sample_encoder_log_likelyhood = ( #section-start
             diagonal_gaussian_unnormalized_log_likelyhood(
                 mean=embedding_mean,
-                stdev=embedding_stdev,
+                stdev=embedding_stdev_unfolded,
                 draw=embedding_sample
             )
         )
         #section-end
         embedding_sample_prior_log_likelyhood = ( #section-start
             diagonal_gaussian_unnormalized_log_likelyhood(
-                mean=self.prior_mean,
-                stdev=self.prior_stdev,
+                mean=prior_mean,
+                stdev=prior_stdev,
                 draw=embedding_sample
             )
         )
@@ -216,7 +213,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         data_decoding_log_likelyhood = ( #section-start
             diagonal_gaussian_unnormalized_log_likelyhood(
                 mean=decoding_mean,
-                stdev=decoding_stdev,
+                stdev=decoding_stdev_unfolded,
                 draw=data
             )
         )
@@ -241,7 +238,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
 #section-end
 #section-end
 #section-start helper functions
-def diagonal_guassian_unnormalized_log_likelyhood(*, #section-start
+def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
     #section-start args
     mean,
     stdev,
@@ -256,7 +253,10 @@ def diagonal_guassian_unnormalized_log_likelyhood(*, #section-start
     #section-end
     #section-start validate input
     batch_size = mean.shape[0]
-    assert mean.shape == stdev.shape
+    assert stdev.shape[0] == batch_size
+    #section-start assert stdev has no ambiguity when broadcast to mean size
+    assert len(mean.shape) == len(stdev.shape)
+    #section-end
     assert mean.shape == draw.shape
     assert torch.all(stdev > 0)
     #section-end
@@ -273,10 +273,10 @@ def diagonal_guassian_unnormalized_log_likelyhood(*, #section-start
     #section-end
     #section-start do the calculation!
     #section-start determine the probability when normalized
-    identity_prob = (-0.5*(((mean-draw)/stdev)**2)).sum()
+    identity_prob = (-0.5*(((mean-draw)/stdev)**2)).sum(dim=1)
     #section-end
     #section-start determine the determinant
-    determinant_regularizer = torch.log(stdev).sum()
+    determinant_regularizer = torch.log(stdev).sum(dim=1)
     #section-end
     #section-start combine these together
     retval = identity_prob - determinant_regularizer
