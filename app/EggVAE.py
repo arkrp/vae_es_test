@@ -167,6 +167,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-start run the encoder!
         embedding_mean = self.encoder(data)
         embedding_stdev = torch.abs(self.encoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
+        embedding_stdev = torch.ones_like(embedding_stdev) #TODO remove
         #section-start unfold stdev to match dimension number
         embedding_stdev_unfolded = torch.unflatten(
             input=embedding_stdev,
@@ -187,7 +188,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         #section-end
         #section-start run the decoder!
         decoding_mean = self.decoder(embedding_sample)
-        decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
+        #decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
         decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
         decoding_stdev = torch.ones_like(decoding_stdev) #TODO remove
         #section-start unfold stdev to match dimension number
@@ -232,7 +233,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
             embedding_sample_prior_log_likelyhood -
             embedding_sample_encoder_log_likelyhood
         )
-        evidence_lower_bound = data_decoding_log_likelyhood #TODO remove
+        #evidence_lower_bound = data_decoding_log_likelyhood #TODO remove
         #section-end
         #section-end
         #section-start validate output

@@ -200,7 +200,7 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
 #section-end
 def generation_figure(decoder): #section-start
     def random_decoder_sample():
-      return decoder(torch.randn(4).unsqueeze(0))[0]
+      return decoder(torch.zeros(1).unsqueeze(0))[0]
     rows, columns, scaleup = 2, 8, 2
     figure = plt.figure(figsize=(columns* scaleup, rows*scaleup), layout='constrained')
     figure.suptitle('Random Draws p(~N(0,I))')
@@ -220,13 +220,13 @@ def main(): #section-start
     batch_size = 96
     model = EggVAEGaussian(
         data_shape=torch.Size([1, 28, 28]),
-        embedding_shape=torch.Size([4]),
-        network_width=16)
+        embedding_shape=torch.Size([1]),
+        network_width=4)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-1)
     loss_function = reverse_elbo_loss
     training_dataset, _ = MNIST()
-    epochs=10
+    epochs=40
     #section-end
     #section-start run the train loop
     egg_train_loop(
