@@ -7,6 +7,7 @@ podman run -it\
     --runtime crun \
     --name vae_es_test \
     -v data_dir:/app/data_dir \
+    -v ./figures:/app/figures \
     -e DATA_DIR="/app/data_dir" \
     vae_es_test $1
 #--cap-add=SYS_PTRACE \

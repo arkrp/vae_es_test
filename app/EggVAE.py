@@ -4,7 +4,7 @@ import torch
 import EggModule as egg
 #section-end
 #section-start write constants
-MINIMUM_STDEV = 0.03
+MINIMUM_STDEV = 0.1
 #section-end
 #section-end
 #section-start models
@@ -37,24 +37,24 @@ class EggSimpleNet(torch.nn.Module): #section-start
         #section-end
         #section-start build network!
         self.stack = torch.nn.Sequential(
-            egg.EggBatchNorm1d(
-                num_features=input_shape.numel()
-            ),
+            #egg.EggBatchNorm1d(
+            #    num_features=input_shape.numel()
+            #),
             egg.EggAffine(
                 num_input_features=input_shape.numel(),
                 num_output_features=network_width
             ),
-            egg.EggBatchNorm1d(
-                num_features=network_width
-            ),
+            #egg.EggBatchNorm1d(
+            #    num_features=network_width
+            #),
             torch.nn.ReLU(),
             egg.EggAffine(
                 num_input_features=network_width,
                 num_output_features=network_width
             ),
-            egg.EggBatchNorm1d(
-                num_features=network_width
-            ),
+            #egg.EggBatchNorm1d(
+            #    num_features=network_width
+            #),
             torch.nn.ReLU(),
             egg.EggAffine(
                 num_input_features=network_width,
