@@ -47,16 +47,16 @@ class EggSimpleNet(torch.nn.Module): #section-start
             #egg.EggBatchNorm1d(
             #    num_features=network_width
             #),
-            torch.nn.LeakyReLU(),
-            egg.EggAffine(
-                num_input_features=network_width,
-                num_output_features=network_width
-            ),
-            torch.nn.LeakyReLU(),
-            egg.EggAffine(
-                num_input_features=network_width,
-                num_output_features=network_width
-            ),
+            #torch.nn.LeakyReLU(),
+            #egg.EggAffine(
+            #    num_input_features=network_width,
+            #    num_output_features=network_width
+            #),
+            #torch.nn.LeakyReLU(),
+            #egg.EggAffine(
+            #    num_input_features=network_width,
+            #    num_output_features=network_width
+            #),
             #egg.EggBatchNorm1d(
             #    num_features=network_width
             #),
@@ -231,10 +231,7 @@ class EggVAEGaussian(torch.nn.Module): #section-start
             embedding_sample_prior_log_likelyhood -
             embedding_sample_encoder_log_likelyhood
         )
-        evidence_lower_bound = -torch.sum(
-            (decoding_mean-1)**2,
-            dim=(1,2,3)
-        )#TODO remove
+        evidence_lower_bound = data_decoding_log_likelyhood #TODO remove
         #section-end
         #section-end
         #section-start validate output

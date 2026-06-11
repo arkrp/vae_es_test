@@ -24,6 +24,10 @@ def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, bat
         #section-end
         #section-start loop to train!
         for batch_number, (X,Y) in enumerate(training_dataloader):
+            #section-start move data to the correct device
+            X = X.to(device)
+            Y = Y.to(device)
+            #section-end
             #section-start perturb the model
             actual_batch_size = X.shape[0]
             model.apply(perturb(actual_batch_size))
@@ -123,9 +127,74 @@ def VAE_loss_function(X, Y, ELBO): #section-start
 #section-end
 some_data, _ = MNIST()
 specific_image = some_data[0][0].unsqueeze(0).to(device)
-def l1_loss_function(X, Y, Pred): #section-start
+def l1_loss_function_fixed(X, Y, Pred): #section-start
     assert specific_image.shape[1:]==Pred.shape[1:]
     return(torch.abs(specific_image-Pred).flatten(start_dim=1).sum(dim=1))
+#section-end
+def l1_loss_function_dynamic(X, Y, Pred): #section-start
+    assert X.shape==Pred.shape
+    return(torch.abs(X-Pred).flatten(start_dim=1).sum(dim=1))
+#section-end
+def l2_loss_function_dynamic(X, Y, Pred): #section-start
+    assert X.shape==Pred.shape
+    stdev = torch.ones_like(X)
+    return(-diagonal_gaussian_unnormalized_log_likelyhood(
+        mean=Pred,
+        stdev=stdev,
+        draw=X,
+    ))
+#section-end
+def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
+    #section-start args
+    mean,
+    stdev,
+    draw):
+    #section-end
+    #section-start """
+    """
+    I had to modify this one to return a vector of losses instead of a single unified loss. This makes it eggroll compatible.
+    
+    This just gets the log likelyhood of drawing something from a multivaritate gaussian with diagonal covariance matrix
+    """
+    #section-end
+    #section-start validate input
+    batch_size = mean.shape[0]
+    assert stdev.shape[0] == batch_size
+    #section-start assert stdev has no ambiguity when broadcast to mean size
+    assert len(mean.shape) == len(stdev.shape)
+    #section-end
+    assert mean.shape == draw.shape
+    assert torch.all(stdev > 0)
+    #section-end
+    #section-start flatten the inputs
+    mean = torch.flatten(
+        input=mean,
+        start_dim=1)
+    stdev = torch.flatten(
+        input=stdev,
+        start_dim=1)
+    draw = torch.flatten(
+        input=draw,
+        start_dim=1)
+    #section-end
+    #section-start do the calculation!
+    #section-start determine the probability when normalized
+    identity_prob = (-0.5*(((mean-draw)/stdev)**2)).sum(dim=1)
+    #section-end
+    #section-start determine the determinant
+    determinant_regularizer = torch.log(stdev).sum(dim=1)
+    #section-end
+    #section-start combine these together
+    retval = identity_prob - determinant_regularizer
+    #section-end
+    #section-end
+    #section-start validate output
+    assert retval.shape[0] == batch_size
+    assert len(retval.shape) == 1
+    #section-end
+    #section-start return output!
+    return retval
+    #section-end
 #section-end
 def generation_figure(decoder): #section-start
     def random_decoder_sample():
@@ -147,7 +216,7 @@ def generation_figure(decoder): #section-start
 #section-end
 def main(): #section-start
     #section-start set training parameters
-    batch_size = 128
+    batch_size = 96
     #model = EggVAEGaussian(
     #    data_shape=torch.Size([1, 28, 28]),
     #    embedding_shape=torch.Size([10]),
@@ -156,13 +225,13 @@ def main(): #section-start
     model = EggSimpleNet(
         input_shape=torch.Size([1]),
         output_shape=torch.Size([1,28,28]),
-        network_width=32)
+        network_width=16)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-2, weight_decay=1e-4)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=1e-8)
-    loss_function = l1_loss_function
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-1)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1e-10, weight_decay=1e-2)
+    loss_function = l2_loss_function_dynamic
     training_dataset, _ = MNIST()
-    epochs=12
+    epochs=10
     #section-end
     #section-start run the train loop
     egg_train_loop(
