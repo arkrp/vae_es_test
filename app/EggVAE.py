@@ -61,6 +61,9 @@ class EggSimpleNet(torch.nn.Module): #section-start
             #    num_features=network_width
             #),
             #torch.nn.LeakyReLU(),
+            #egg.EggScaleShift(
+            #    num_features=input_shape.numel()
+            #),
             egg.EggAffine(
                 num_input_features=input_shape.numel(),
                 num_output_features=output_shape.numel()
@@ -184,11 +187,11 @@ class EggVAEGaussian(torch.nn.Module): #section-start
         prior_mean = torch.zeros(
             size=torch.Size([batch_size])+self.embedding_shape
         )
-        prior_stdev = prior_mean + 0.00001 #TODO change this to something reasonable
+        prior_stdev = prior_mean + 1
         #section-end
         #section-start run the decoder!
-        decoding_mean = self.decoder(embedding_sample)
-        decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)) # TODO remove
+        decoding_mean = self.decoder(embedding_sample+1)
+        #decoding_mean = self.decoder(torch.zeros(size=torch.Size([batch_size])+self.embedding_shape)+1) # TODO remove
         decoding_stdev = torch.abs(self.decoder_stdev_module(batch_size=batch_size)) + MINIMUM_STDEV
         decoding_stdev = torch.ones_like(decoding_stdev)*0.1 #TODO remove
         #section-start unfold stdev to match dimension number

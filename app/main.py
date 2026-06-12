@@ -4,6 +4,7 @@ import torchvision
 import torch
 import math
 import pandas as pd
+import os
 import matplotlib.pyplot as plt
 from EggModule import perturb, egg_grad, reset_perturbation
 from EggVAE import EggVAEGaussian, EggSimpleNet
@@ -18,7 +19,7 @@ def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, bat
         data_size = len(training_dataloader.dataset)
         num_batches = math.ceil(data_size/batch_size)
         batch_report_point = num_batches//training_epoch_granularity
-        batch_dot_point = (batch_report_point//training_epoch_dots)
+        #batch_dot_point = (batch_report_point//training_epoch_dots)
         #section-end
         #section-start set model to train mode
         model.train()
@@ -50,9 +51,9 @@ def egg_train_epoch(*, model, loss_function, training_dataloader, optimizer, bat
             #section-end
             #section-start print out progress
             report_point = batch_number % batch_report_point
-            dot_point = report_point % batch_dot_point
-            if batch_dot_point - dot_point == 1:
-                print('.', end='', flush=True)
+            #dot_point = report_point % batch_dot_point
+            #if batch_dot_point - dot_point == 1:
+            #    print('.', end='', flush=True)
             if batch_report_point - report_point == 1:
                 loss_score = loss.mean().item()
                 current = batch_number * batch_size + len(X)
@@ -127,6 +128,7 @@ def VAE_loss_function(X, Y, ELBO): #section-start
 #section-end
 some_data, _ = MNIST()
 specific_image = some_data[0][0].unsqueeze(0).to(device)
+#section-start losses
 def l1_loss_function_fixed(X, Y, Pred): #section-start
     assert specific_image.shape[1:]==Pred.shape[1:]
     return(torch.abs(specific_image-Pred).flatten(start_dim=1).sum(dim=1))
@@ -199,9 +201,10 @@ def diagonal_gaussian_unnormalized_log_likelyhood(*, #section-start
     return retval
     #section-end
 #section-end
+#section-end
 def generation_figure(decoder): #section-start
     def random_decoder_sample():
-      return decoder(torch.zeros(2).unsqueeze(0))[0]
+      return decoder(torch.randn(1).unsqueeze(0)+1)[0]
     rows, columns, scaleup = 2, 8, 2
     figure = plt.figure(figsize=(columns* scaleup, rows*scaleup), layout='constrained')
     figure.suptitle('Random Draws p(~N(0,I))')
@@ -218,16 +221,19 @@ def generation_figure(decoder): #section-start
 #section-end
 def main(): #section-start
     #section-start set training parameters
-    batch_size = 128
+    batch_size = 4096
     model = EggVAEGaussian(
         data_shape=torch.Size([1, 28, 28]),
-        embedding_shape=torch.Size([2]),
-        network_width=4)
+        embedding_shape=torch.Size([1]),
+        network_width=1)
+    modelsavepath="/app/figures/model.pt"
+    if os.path.isfile(modelsavepath):
+        model.load_state_dict(torch.load(modelsavepath, weights_only=True))
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-1)
     loss_function = reverse_elbo_loss
     training_dataset, _ = MNIST()
-    epochs=10
+    epochs=100
     #section-end
     #section-start run the train loop
     egg_train_loop(
@@ -238,6 +244,7 @@ def main(): #section-start
         batch_size=batch_size,
         epochs=epochs)
     #section-end
+    torch.save(model.state_dict(), modelsavepath)
     #section-start call the figure generator
     print("making generation figure")
     generation_figure(model.decoder).savefig("/app/figures/genfig.png")
